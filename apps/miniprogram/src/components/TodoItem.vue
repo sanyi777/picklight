@@ -12,48 +12,80 @@ const emit = defineEmits<{
 
 <template>
   <view class="todo-item">
-    <checkbox :checked="todo.completed" @click="emit('toggle', todo.id, !todo.completed)" />
     <view class="todo-main">
-      <text class="todo-time" v-if="todo.time">{{ todo.time }}</text>
+      <text class="todo-time">{{ todo.time || '待定' }}</text>
       <text :class="['todo-content', { done: todo.completed }]">{{ todo.content }}</text>
+    </view>
+    <view :class="['check-dot', { checked: todo.completed }]" @click="emit('toggle', todo.id, !todo.completed)">
+      <text v-if="todo.completed">✓</text>
     </view>
   </view>
 </template>
 
 <style scoped lang="scss">
 .todo-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 0;
-  border-bottom: 1px solid rgba(34, 34, 34, 0.08);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  gap: 9px;
+  min-height: 39px;
+  border: 1px solid #e5edf4;
+  border-radius: 8px;
+  padding: 7px 9px;
+  background: #fbfdff;
+  overflow: hidden;
 }
 
 .todo-item:last-child {
-  border-bottom: 0;
+  border-bottom: 1px solid #e5edf4;
+}
+
+.check-dot {
+  display: flex;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #c8d4df;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #ffffff;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.check-dot.checked {
+  border-color: #19a99a;
+  background: #19a99a;
 }
 
 .todo-main {
-  display: flex;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
   min-width: 0;
-  flex: 1;
-  align-items: baseline;
+  align-items: start;
   gap: 8px;
 }
 
 .todo-time {
   flex: 0 0 auto;
-  color: #25635f;
+  color: #2f72b4;
   font-size: 12px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
 }
 
 .todo-content {
+  min-width: 0;
   overflow-wrap: anywhere;
-  font-size: 15px;
+  color: #202733;
+  font-size: 14px;
+  line-height: 1.35;
 }
 
 .todo-content.done {
-  color: #8a857c;
+  color: #9aa6b3;
   text-decoration: line-through;
 }
 </style>

@@ -1,37 +1,208 @@
 <script setup lang="ts">
-import type { Scrap } from '@/domain/types';
+import { ref } from 'vue';
+import type { ID, Scrap, ScrapCategory } from '@/domain/types';
 
-defineProps<{
-  scrap: Scrap;
+const props = withDefaults(
+  defineProps<{
+    scrap: Scrap;
+    hideCategory?: boolean;
+  }>(),
+  {
+    hideCategory: false
+  }
+);
+
+const emit = defineEmits<{
+  update: [id: ID, category: ScrapCategory, content: string];
+  delete: [id: ID];
 }>();
+
+const categories: ScrapCategory[] = ['随想', '灵感', '待办', '分心', '复盘'];
+const editing = ref(false);
+const draftCategory = ref<ScrapCategory>(props.scrap.category);
+const draftContent = ref(props.scrap.content);
+
+function startEdit() {
+  draftCategory.value = props.scrap.category;
+  draftContent.value = props.scrap.content;
+  editing.value = true;
+}
+
+function cancelEdit() {
+  editing.value = false;
+}
+
+function saveEdit() {
+  if (!draftContent.value.trim()) {
+    return;
+  }
+
+  emit('update', props.scrap.id, draftCategory.value, draftContent.value);
+  editing.value = false;
+}
+
+function confirmDelete() {
+  uni.showModal({
+    title: '删除零碎',
+    content: '这条记录会被删除。如果它关联了待办，对应待办也会一起移除。',
+    confirmText: '删除',
+    confirmColor: '#8a5960',
+    success: (result) => {
+      if (result.confirm) {
+        emit('delete', props.scrap.id);
+      }
+    }
+  });
+}
 </script>
 
 <template>
   <view class="scrap-item">
-    <text class="category">{{ scrap.category }}</text>
-    <text class="content">{{ scrap.content }}</text>
+    <view v-if="!editing" class="read-mode">
+      <view class="item-top">
+        <text v-if="!hideCategory" class="category">{{ scrap.category }}</text>
+        <text v-else class="content inline-content">{{ scrap.content }}</text>
+        <view class="item-actions">
+          <button class="ghost-action" @tap.stop="startEdit">修改</button>
+          <button class="danger-action" @tap.stop="confirmDelete">删除</button>
+        </view>
+      </view>
+      <text v-if="!hideCategory" class="content">{{ scrap.content }}</text>
+    </view>
+
+    <view v-else class="edit-mode">
+      <textarea v-model="draftContent" maxlength="500" />
+      <view class="category-row">
+        <button
+          v-for="item in categories"
+          :key="item"
+          :class="['category-chip', { active: draftCategory === item }]"
+          @tap.stop="draftCategory = item"
+        >
+          {{ item }}
+        </button>
+      </view>
+      <view class="edit-actions">
+        <button class="ghost-action" @tap.stop="cancelEdit">取消</button>
+        <button class="save-action" @tap.stop="saveEdit">保存</button>
+      </view>
+    </view>
   </view>
 </template>
 
 <style scoped lang="scss">
 .scrap-item {
-  display: grid;
-  gap: 6px;
-  border-bottom: 1px solid rgba(34, 34, 34, 0.08);
-  padding: 10px 0;
+  border-bottom: 1px solid #e5edf4;
+  padding: 8px 0;
 }
 
 .scrap-item:last-child {
   border-bottom: 0;
 }
 
+.read-mode,
+.edit-mode {
+  display: grid;
+  gap: 7px;
+}
+
+.item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.item-actions,
+.edit-actions {
+  display: flex;
+  gap: 6px;
+}
+
 .category {
-  color: #b75c3b;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: #eaf4ff;
+  color: #2f72b4;
   font-size: 12px;
 }
 
 .content {
   overflow-wrap: anywhere;
-  font-size: 15px;
+  color: #202733;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.inline-content {
+  min-width: 0;
+  flex: 1;
+}
+
+textarea {
+  width: 100%;
+  height: 72px;
+  border: 1px solid #dce4ec;
+  border-radius: 8px;
+  padding: 9px;
+  background: #fbfdff;
+  color: #202733;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.category-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.category-chip {
+  min-width: 54px;
+  height: 30px;
+  min-height: 30px;
+  border: 1px solid #dce4ec;
+  border-radius: 999px;
+  padding: 0 10px;
+  background: #fbfdff;
+  color: #6f7b8a;
+  font-size: 12px;
+  line-height: 30px;
+}
+
+.category-chip.active {
+  border-color: rgba(74, 144, 217, 0.56);
+  background: #eaf4ff;
+  color: #2f72b4;
+  font-weight: 750;
+}
+
+.ghost-action,
+.danger-action,
+.save-action {
+  height: 26px;
+  min-height: 26px;
+  border-radius: 8px;
+  padding: 0 8px;
+  font-size: 11px;
+  line-height: 26px;
+}
+
+.ghost-action {
+  border: 1px solid #dce4ec;
+  background: #fbfdff;
+  color: #6f7b8a;
+}
+
+.danger-action {
+  border: 1px solid rgba(138, 89, 96, 0.24);
+  background: rgba(138, 89, 96, 0.08);
+  color: #8a5960;
+}
+
+.save-action {
+  background: #4a90d9;
+  color: #ffffff;
 }
 </style>

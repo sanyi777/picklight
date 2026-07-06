@@ -1,9 +1,18 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
-import { addDailyAnchor, createDailyAnchor, getAnchorsForDate, getCurrentAnchor, setCurrentAnchor, updateAnchorProgress } from '@/domain/anchors';
-import { todayISODate } from '@/domain/date';
+import {
+  addDailyAnchor,
+  createDailyAnchor,
+  deleteAnchor as removeAnchorById,
+  getAnchorsForDate,
+  getCurrentAnchor,
+  setCurrentAnchor,
+  updateAnchorProgress,
+  updateAnchorTitle
+} from '@/domain/anchors';
+import { addDays, nowISODateTime, todayISODate } from '@/domain/date';
 import { addDistractionToFocusSession, completeFocusSession, createFocusSession, startFocusSession } from '@/domain/focus';
-import { createScrap, getScrapsByCategory } from '@/domain/scraps';
+import { createScrap, deleteScrap as removeScrapById, getScrapsByCategory, updateScrap as updateScrapById } from '@/domain/scraps';
 import { createTodo, getTodoStats, getTodosForDate, rollUnfinishedTodos, toggleTodo } from '@/domain/todos';
 import type { DailyAnchor, FocusSession, ID, ISODate, PicklightState, Scrap, ScrapCategory, Todo } from '@/domain/types';
 import { localStore } from '@/storage/localStore';
@@ -22,6 +31,31 @@ function createInitialState(): PicklightState {
   };
 }
 
+function rollOverdueTodosToToday(savedState: PicklightState, today: ISODate): PicklightState {
+  const overdueDates = savedState.todos
+    .filter((todo) => !todo.completed && todo.date < today)
+    .map((todo) => todo.date)
+    .sort();
+
+  if (!overdueDates.length && savedState.activeDate >= today) {
+    return savedState;
+  }
+
+  let todos = savedState.todos;
+  let cursor = overdueDates[0] ?? savedState.activeDate;
+
+  while (cursor < today) {
+    todos = rollUnfinishedTodos(todos, cursor);
+    cursor = addDays(cursor, 1);
+  }
+
+  return {
+    ...savedState,
+    todos,
+    activeDate: savedState.activeDate < today ? today : savedState.activeDate
+  };
+}
+
 export const usePicklightStore = defineStore('picklight', () => {
   const state = ref<PicklightState>(createInitialState());
 
@@ -35,12 +69,22 @@ export const usePicklightStore = defineStore('picklight', () => {
   function hydrate() {
     const savedState = localStore.load();
     if (savedState) {
-      state.value = savedState;
+      const currentToday = todayISODate();
+      const nextState = rollOverdueTodosToToday(savedState, currentToday);
+      state.value = nextState;
+      if (nextState !== savedState) {
+        persist();
+      }
     }
   }
 
   function persist() {
     localStore.save(state.value);
+  }
+
+  function resetAllData() {
+    state.value = createInitialState();
+    localStore.clear();
   }
 
   function setActiveDate(date: ISODate) {
@@ -94,6 +138,60 @@ export const usePicklightStore = defineStore('picklight', () => {
     return addScrap('复盘', content).scrap;
   }
 
+  function updateScrap(id: ID, category: ScrapCategory, content: string): Scrap | undefined {
+    const trimmedContent = content.trim();
+    const previous = state.value.scraps.find((scrap) => scrap.id === id);
+    if (!previous || !trimmedContent) {
+      return undefined;
+    }
+
+    const timestamp = nowISODateTime();
+    const linkedTodoId = category === '待办' ? previous.linkedTodoId ?? createId('todo') : undefined;
+    state.value.scraps = updateScrapById(state.value.scraps, id, {
+      category,
+      content: trimmedContent,
+      linkedTodoId,
+      now: timestamp
+    });
+
+    if (previous.linkedTodoId && category !== '待办') {
+      state.value.todos = state.value.todos.filter((todo) => todo.id !== previous.linkedTodoId);
+    } else if (category === '待办' && previous.linkedTodoId) {
+      state.value.todos = state.value.todos.map((todo) =>
+        todo.id === previous.linkedTodoId
+          ? {
+              ...todo,
+              content: trimmedContent,
+              updatedAt: timestamp
+            }
+          : todo
+      );
+    } else if (category === '待办' && linkedTodoId) {
+      state.value.todos = [
+        ...state.value.todos,
+        createTodo({
+          id: linkedTodoId,
+          date: state.value.activeDate,
+          content: trimmedContent,
+          sourceScrapId: id,
+          now: timestamp
+        })
+      ];
+    }
+
+    persist();
+    return state.value.scraps.find((scrap) => scrap.id === id);
+  }
+
+  function deleteScrap(id: ID) {
+    const previous = state.value.scraps.find((scrap) => scrap.id === id);
+    state.value.scraps = removeScrapById(state.value.scraps, id);
+    if (previous?.linkedTodoId) {
+      state.value.todos = state.value.todos.filter((todo) => todo.id !== previous.linkedTodoId);
+    }
+    persist();
+  }
+
   function addAnchor(title: string): DailyAnchor {
     const anchor = createDailyAnchor({
       id: createId('anchor'),
@@ -114,6 +212,24 @@ export const usePicklightStore = defineStore('picklight', () => {
 
   function setAnchorProgress(id: ID, progress: number) {
     state.value.anchors = updateAnchorProgress(state.value.anchors, id, progress);
+    persist();
+  }
+
+  function renameAnchor(id: ID, title: string) {
+    state.value.anchors = updateAnchorTitle(state.value.anchors, id, title);
+    persist();
+  }
+
+  function deleteAnchor(id: ID) {
+    state.value.anchors = removeAnchorById(state.value.anchors, id);
+    state.value.focusSessions = state.value.focusSessions.map((session) =>
+      session.anchorId === id
+        ? {
+            ...session,
+            anchorId: undefined
+          }
+        : session
+    );
     persist();
   }
 
@@ -142,6 +258,11 @@ export const usePicklightStore = defineStore('picklight', () => {
     persist();
   }
 
+  function deleteFocus(id: ID) {
+    state.value.focusSessions = state.value.focusSessions.filter((session) => session.id !== id);
+    persist();
+  }
+
   function addFocusDistraction(sessionId: ID, content: string) {
     state.value.focusSessions = addDistractionToFocusSession(state.value.focusSessions, sessionId, content);
     addScrap('分心', content);
@@ -158,18 +279,24 @@ export const usePicklightStore = defineStore('picklight', () => {
     allScraps,
     hydrate,
     persist,
+    resetAllData,
     setActiveDate,
     addTodo,
     setTodoCompleted,
     rollDateForward,
     addScrap,
     archiveReview,
+    updateScrap,
+    deleteScrap,
     addAnchor,
     makeAnchorCurrent,
     setAnchorProgress,
+    renameAnchor,
+    deleteAnchor,
     createFocus,
     startFocus,
     completeFocus,
+    deleteFocus,
     addFocusDistraction
   };
 });

@@ -4,6 +4,7 @@ import { getNextSevenDays } from '@/domain/date';
 import type { ISODate, Todo } from '@/domain/types';
 
 const props = defineProps<{
+  startDate: ISODate;
   activeDate: ISODate;
   todos: Todo[];
 }>();
@@ -13,7 +14,7 @@ const emit = defineEmits<{
 }>();
 
 const days = computed(() =>
-  getNextSevenDays(props.activeDate).map((date) => ({
+  getNextSevenDays(props.startDate).map((date) => ({
     date,
     count: props.todos.filter((todo) => todo.date === date && !todo.completed).length
   }))
@@ -21,37 +22,61 @@ const days = computed(() =>
 </script>
 
 <template>
-  <scroll-view scroll-x class="week-strip">
-    <view class="day-list">
-      <button v-for="day in days" :key="day.date" class="day-button" @click="emit('select', day.date)">
-        <text>{{ day.date.slice(5) }}</text>
-        <text class="count">{{ day.count }} 件</text>
-      </button>
-    </view>
-  </scroll-view>
+  <view class="week-strip">
+    <button
+      v-for="day in days"
+      :key="day.date"
+      :class="['day-button', { active: day.date === activeDate }]"
+      @click="emit('select', day.date)"
+    >
+      <text class="day-label">{{ day.date === startDate ? '今天' : day.date.slice(5) }}</text>
+      <text class="count">{{ day.count }}项</text>
+    </button>
+  </view>
 </template>
 
 <style scoped lang="scss">
 .week-strip {
-  width: 100%;
-}
-
-.day-list {
-  display: flex;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
 }
 
 .day-button {
-  width: 76px;
+  display: grid;
+  min-width: 0;
+  height: 44px;
+  grid-template-rows: 18px 16px;
+  align-content: center;
+  justify-items: center;
+  border: 1px solid #e2ebf2;
   border-radius: 8px;
-  background: #fffaf1;
-  color: #222222;
-  font-size: 13px;
+  padding: 4px 2px;
+  background: #fbfdff;
+  color: #6f7b8a;
+  font-size: 10px;
+  line-height: 1;
 }
 
+.day-button.active {
+  border-color: rgba(74, 144, 217, 0.56);
+  background: #eaf4ff;
+  color: #2f72b4;
+  font-weight: 750;
+}
+
+.day-label,
 .count {
   display: block;
-  color: #6f6b62;
-  font-size: 11px;
+  max-width: 100%;
+  overflow: hidden;
+  line-height: 16px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.day-label {
+  line-height: 18px;
 }
 </style>

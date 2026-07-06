@@ -25,34 +25,11 @@
       }
     }
   ],
-  "tabBar": {
-    "color": "#6f6b62",
-    "selectedColor": "#25635f",
-    "backgroundColor": "#fffaf1",
-    "borderStyle": "black",
-    "list": [
-      {
-        "pagePath": "pages/home/index",
-        "text": "主页"
-      },
-      {
-        "pagePath": "pages/scraps/index",
-        "text": "零碎"
-      },
-      {
-        "pagePath": "pages/schedule/index",
-        "text": "日程"
-      },
-      {
-        "pagePath": "pages/focus/index",
-        "text": "专注"
-      }
-    ]
-  },
   "globalStyle": {
     "navigationBarTextStyle": "black",
     "navigationBarTitleText": "拾光",
-    "navigationBarBackgroundColor": "#fffaf1",
-    "backgroundColor": "#f7f3ea"
+    "navigationBarBackgroundColor": "#edf3f8",
+    "backgroundColor": "#f5f8fb",
+    "navigationStyle": "custom"
   }
 }

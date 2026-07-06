@@ -16,6 +16,13 @@ export interface CreateScrapResult {
   todo?: Todo;
 }
 
+export interface UpdateScrapInput {
+  category: ScrapCategory;
+  content: string;
+  linkedTodoId?: ID;
+  now?: ISODateTime;
+}
+
 export function createScrap(input: CreateScrapInput): CreateScrapResult {
   const timestamp = input.now ?? nowISODateTime();
   const trimmedContent = input.content.trim();
@@ -60,6 +67,26 @@ export function updateScrapCategory(
         }
       : scrap
   );
+}
+
+export function updateScrap(scraps: Scrap[], id: ID, input: UpdateScrapInput): Scrap[] {
+  const timestamp = input.now ?? nowISODateTime();
+
+  return scraps.map((scrap) =>
+    scrap.id === id
+      ? {
+          ...scrap,
+          category: input.category,
+          content: input.content.trim(),
+          linkedTodoId: input.linkedTodoId,
+          updatedAt: timestamp
+        }
+      : scrap
+  );
+}
+
+export function deleteScrap(scraps: Scrap[], id: ID): Scrap[] {
+  return scraps.filter((scrap) => scrap.id !== id);
 }
 
 export function getScrapsByCategory(scraps: Scrap[], category?: ScrapCategory): Scrap[] {

@@ -28,10 +28,31 @@ export function addDailyAnchor(anchors: DailyAnchor[], anchor: DailyAnchor): Dai
   const sameDayAnchors = anchors.filter((item) => item.date === anchor.date);
 
   if (sameDayAnchors.length >= MAX_DAILY_ANCHORS) {
-    throw new Error('每天最多只能有两个主锚点');
+    throw new Error('每天最多只能有两个锚点');
   }
 
   return [...anchors, anchor];
+}
+
+export function updateAnchorTitle(anchors: DailyAnchor[], id: ID, title: string, now = nowISODateTime()): DailyAnchor[] {
+  const trimmedTitle = title.trim();
+  if (!trimmedTitle) {
+    return anchors;
+  }
+
+  return anchors.map((anchor) =>
+    anchor.id === id
+      ? {
+          ...anchor,
+          title: trimmedTitle,
+          updatedAt: now
+        }
+      : anchor
+  );
+}
+
+export function deleteAnchor(anchors: DailyAnchor[], id: ID): DailyAnchor[] {
+  return anchors.filter((anchor) => anchor.id !== id);
 }
 
 export function setCurrentAnchor(anchors: DailyAnchor[], id: ID, now = nowISODateTime()): DailyAnchor[] {

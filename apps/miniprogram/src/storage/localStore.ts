@@ -4,6 +4,7 @@ import type { PicklightState } from '@/domain/types';
 export interface StoragePort {
   load(): PicklightState | undefined;
   save(state: PicklightState): void;
+  clear(): void;
 }
 
 export const localStore: StoragePort = {
@@ -17,5 +18,8 @@ export const localStore: StoragePort = {
   },
   save(state) {
     uni.setStorageSync(PICKLIGHT_STORAGE_KEY, state);
+  },
+  clear() {
+    uni.removeStorageSync(PICKLIGHT_STORAGE_KEY);
   }
 };
