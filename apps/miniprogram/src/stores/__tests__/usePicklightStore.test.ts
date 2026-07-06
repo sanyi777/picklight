@@ -1,0 +1,44 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
+import { usePicklightStore } from '../usePicklightStore';
+
+describe('usePicklightStore', () => {
+  beforeEach(() => {
+    const storage = new Map<string, unknown>();
+
+    setActivePinia(createPinia());
+    vi.stubGlobal('uni', {
+      getStorageSync: vi.fn((key: string) => storage.get(key)),
+      setStorageSync: vi.fn((key: string, value: unknown) => storage.set(key, value)),
+      showToast: vi.fn(),
+      switchTab: vi.fn()
+    });
+  });
+
+  it('turns a 待办 scrap into a today todo', () => {
+    const store = usePicklightStore();
+    store.state.activeDate = '2026-07-05';
+
+    const result = store.addScrap('待办', '整理小程序 MVP');
+
+    expect(result.todo).toBeDefined();
+    expect(store.todayTodos).toHaveLength(1);
+    expect(store.todayTodos[0]).toMatchObject({
+      date: '2026-07-05',
+      content: '整理小程序 MVP',
+      sourceScrapId: result.scrap.id
+    });
+  });
+
+  it('archives schedule review as a 复盘 scrap', () => {
+    const store = usePicklightStore();
+
+    store.archiveReview('今天先把本地闭环跑通');
+
+    expect(store.allScraps).toHaveLength(1);
+    expect(store.allScraps[0]).toMatchObject({
+      category: '复盘',
+      content: '今天先把本地闭环跑通'
+    });
+  });
+});

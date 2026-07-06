@@ -1,0 +1,33 @@
+@use './tokens.scss' as *;
+
+view,
+text,
+button,
+input,
+textarea {
+  box-sizing: border-box;
+}
+
+.page {
+  min-height: 100vh;
+  padding: $space-page;
+  background: $color-bg;
+  color: $color-ink;
+}
+
+.section {
+  margin-bottom: 18px;
+}
+
+.section-title {
+  margin-bottom: 10px;
+  color: $color-muted;
+  font-size: 13px;
+}
+
+.panel {
+  border: 1px solid rgba(34, 34, 34, 0.08);
+  border-radius: $radius-card;
+  background: $color-surface;
+  padding: 14px;
+}

@@ -1,0 +1,58 @@
+{
+  "pages": [
+    {
+      "path": "pages/home/index",
+      "style": {
+        "navigationBarTitleText": "拾光"
+      }
+    },
+    {
+      "path": "pages/scraps/index",
+      "style": {
+        "navigationBarTitleText": "零碎"
+      }
+    },
+    {
+      "path": "pages/schedule/index",
+      "style": {
+        "navigationBarTitleText": "日程"
+      }
+    },
+    {
+      "path": "pages/focus/index",
+      "style": {
+        "navigationBarTitleText": "专注"
+      }
+    }
+  ],
+  "tabBar": {
+    "color": "#6f6b62",
+    "selectedColor": "#25635f",
+    "backgroundColor": "#fffaf1",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/home/index",
+        "text": "主页"
+      },
+      {
+        "pagePath": "pages/scraps/index",
+        "text": "零碎"
+      },
+      {
+        "pagePath": "pages/schedule/index",
+        "text": "日程"
+      },
+      {
+        "pagePath": "pages/focus/index",
+        "text": "专注"
+      }
+    ]
+  },
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "拾光",
+    "navigationBarBackgroundColor": "#fffaf1",
+    "backgroundColor": "#f7f3ea"
+  }
+}
