@@ -50,24 +50,6 @@
 - 微信小程序构建目标：`mp-weixin`
 - 本地存储：`uni.getStorageSync` / `uni.setStorageSync` / `uni.removeStorageSync`
 
-## 项目结构
-
-```text
-apps/miniprogram
-  src/
-    components/     可复用 UI 组件
-    domain/         纯业务逻辑和单元测试
-    pages/          小程序页面
-    storage/        本地存储封装
-    stores/         Pinia 状态中心
-    styles/         全局样式和设计 token
-docs/
-  current-project-context.md
-  phase0-product-definition.md
-  v0.1-acceptance.md
-demo-miniprogram.html
-```
-
 ## 运行方式
 
 安装依赖：
@@ -112,15 +94,6 @@ npm run typecheck
 npm run test
 npm run build:mp-weixin
 ```
-
-当前 v0.1.0 验证状态：
-
-- `npm run typecheck` 通过。
-- `npm run test` 通过，6 个测试文件，20 个测试。
-- `npm run build:mp-weixin` 通过。
-- `C:\Users\86185\Documents\拾光\apps\miniprogram` 预览目录构建通过。
-
-构建时可能出现 Dart Sass `legacy-js-api` deprecation warning，目前不影响小程序构建和运行。
 
 ## 文档
 
