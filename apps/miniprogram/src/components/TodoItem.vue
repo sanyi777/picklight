@@ -7,17 +7,21 @@ defineProps<{
 
 const emit = defineEmits<{
   toggle: [id: string, completed: boolean];
+  delete: [id: string];
 }>();
 </script>
 
 <template>
   <view class="todo-item">
-    <view class="todo-main">
-      <text class="todo-time">{{ todo.time || '待定' }}</text>
+    <view :class="['todo-main', { 'no-time': !todo.time }]">
+      <text v-if="todo.time" class="todo-time">{{ todo.time }}</text>
       <text :class="['todo-content', { done: todo.completed }]">{{ todo.content }}</text>
     </view>
-    <view :class="['check-dot', { checked: todo.completed }]" @click="emit('toggle', todo.id, !todo.completed)">
-      <text v-if="todo.completed">✓</text>
+    <view class="todo-actions">
+      <view :class="['check-dot', { checked: todo.completed }]" @click="emit('toggle', todo.id, !todo.completed)">
+        <text v-if="todo.completed">✓</text>
+      </view>
+      <button class="delete-action" @tap.stop="emit('delete', todo.id)">删除</button>
     </view>
   </view>
 </template>
@@ -66,6 +70,28 @@ const emit = defineEmits<{
   min-width: 0;
   align-items: start;
   gap: 8px;
+}
+
+.todo-actions {
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+}
+
+.delete-action {
+  height: 20px;
+  min-height: 20px;
+  margin: 0;
+  padding: 0 3px;
+  border: 0;
+  background: transparent;
+  color: #8a5960;
+  font-size: 10px;
+  line-height: 20px;
+}
+
+.todo-main.no-time {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .todo-time {

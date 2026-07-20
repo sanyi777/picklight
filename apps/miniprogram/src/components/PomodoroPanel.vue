@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue';
+import { getFocusTiming } from '@/domain/focus';
 import type { FocusSession } from '@/domain/types';
 
 const props = withDefaults(
@@ -17,36 +18,62 @@ const props = withDefaults(
 const emit = defineEmits<{
   create: [task: string, durationMinutes: number];
   start: [id: string];
+  pause: [id: string];
+  extend: [id: string, minutes: number];
   complete: [id: string];
+  abandon: [id: string];
+  update: [id: string, task: string];
   delete: [id: string];
 }>();
 
 const task = ref('');
 const durationMinutes = ref(25);
 const durationInput = ref('25');
-const remainingSeconds = ref(25 * 60);
-const running = ref(false);
+const nowTick = ref(Date.now());
 let timer: ReturnType<typeof setInterval> | undefined;
 
 const hasSession = computed(() => Boolean(props.latestSession));
 const started = computed(() => Boolean(props.latestSession?.startedAt));
-const historySessions = computed(() => [...props.sessions].sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+const running = computed(() => props.latestSession?.status === 'running');
+const timing = computed(() =>
+  props.latestSession ? getFocusTiming(props.latestSession, new Date(nowTick.value).toISOString()) : undefined
+);
+const remainingSeconds = computed(() => timing.value?.remainingSeconds ?? durationMinutes.value * 60);
+const elapsed = computed(() => Boolean(timing.value?.elapsed && props.latestSession?.startedAt && !props.latestSession.completed));
+const historySessions = computed(() => [...props.sessions].sort((a, b) => (b.completedAt ?? b.createdAt).localeCompare(a.completedAt ?? a.createdAt)));
+const editingHistoryId = ref<string>();
+const historyTask = ref('');
 const formattedTime = computed(() => {
   const minutes = Math.floor(remainingSeconds.value / 60);
   const seconds = remainingSeconds.value % 60;
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 });
 const progress = computed(() => {
-  const totalSeconds = Math.max(1, (props.latestSession?.durationMinutes ?? durationMinutes.value) * 60);
-  const elapsed = totalSeconds - remainingSeconds.value;
-  return Math.max(0, Math.min(100, Math.round((elapsed / totalSeconds) * 100)));
+  const totalSeconds = timing.value?.totalSeconds ?? Math.max(1, durationMinutes.value * 60);
+  const elapsedSeconds = timing.value?.elapsedSeconds ?? totalSeconds - remainingSeconds.value;
+  return Math.max(0, Math.min(100, Math.round((elapsedSeconds / totalSeconds) * 100)));
+});
+const stateLabel = computed(() => {
+  if (elapsed.value) {
+    return '已到点';
+  }
+
+  if (running.value) {
+    return '专注中';
+  }
+
+  if (props.latestSession?.status === 'paused') {
+    return '已暂停';
+  }
+
+  return started.value ? '已暂停' : '待开始';
 });
 
 watch(
   () => props.latestSession?.id,
   () => {
-    stopTimer();
-    remainingSeconds.value = getInitialRemainingSeconds();
+    nowTick.value = Date.now();
+    startDisplayTicker();
   },
   { immediate: true }
 );
@@ -63,7 +90,7 @@ function setDuration(value: number) {
   durationMinutes.value = clampDuration(value);
   durationInput.value = String(durationMinutes.value);
   if (!props.latestSession) {
-    remainingSeconds.value = durationMinutes.value * 60;
+    nowTick.value = Date.now();
   }
 }
 
@@ -78,20 +105,6 @@ function updateDurationInput(event: Event) {
   if (Number.isFinite(parsed) && parsed > 0) {
     setDuration(parsed);
   }
-}
-
-function getInitialRemainingSeconds() {
-  if (!props.latestSession) {
-    return durationMinutes.value * 60;
-  }
-
-  const totalSeconds = props.latestSession.durationMinutes * 60;
-  if (!props.latestSession.startedAt) {
-    return totalSeconds;
-  }
-
-  const elapsedSeconds = Math.floor((Date.now() - new Date(props.latestSession.startedAt).getTime()) / 1000);
-  return Math.max(0, totalSeconds - elapsedSeconds);
 }
 
 function createSession() {
@@ -109,33 +122,31 @@ function startOrResume() {
     return;
   }
 
-  if (!props.latestSession.startedAt) {
-    emit('start', props.latestSession.id);
-  }
-
-  startTimer();
+  emit('start', props.latestSession.id);
+  startDisplayTicker();
 }
 
-function startTimer() {
-  if (running.value) {
+function startDisplayTicker() {
+  if (timer) {
     return;
   }
 
-  running.value = true;
   timer = setInterval(() => {
-    remainingSeconds.value = Math.max(0, remainingSeconds.value - 1);
-    if (remainingSeconds.value === 0 && props.latestSession) {
-      completeSession();
-    }
+    nowTick.value = Date.now();
   }, 1000);
 }
 
 function pauseTimer() {
-  stopTimer();
+  const sessionId = props.latestSession?.id;
+  if (!sessionId) {
+    return;
+  }
+
+  emit('pause', sessionId);
+  nowTick.value = Date.now();
 }
 
 function stopTimer() {
-  running.value = false;
   if (timer) {
     clearInterval(timer);
     timer = undefined;
@@ -150,6 +161,34 @@ function completeSession() {
 
   stopTimer();
   emit('complete', sessionId);
+}
+
+function abandonSession() {
+  const sessionId = props.latestSession?.id;
+  if (!sessionId) return;
+  stopTimer();
+  emit('abandon', sessionId);
+}
+
+function startHistoryEdit(id: string, taskValue: string) {
+  editingHistoryId.value = id;
+  historyTask.value = taskValue;
+}
+
+function saveHistoryEdit() {
+  if (!editingHistoryId.value || !historyTask.value.trim()) return;
+  emit('update', editingHistoryId.value, historyTask.value);
+  editingHistoryId.value = undefined;
+}
+
+function extendSession() {
+  const sessionId = props.latestSession?.id;
+  if (!sessionId) {
+    return;
+  }
+
+  emit('extend', sessionId, 5);
+  nowTick.value = Date.now();
 }
 
 function deleteSession(id: string) {
@@ -205,10 +244,15 @@ function deleteSession(id: string) {
               :class="['history-item', { completed: session.completed }]"
             >
               <view class="history-copy">
-                <text class="history-task">{{ session.task }}</text>
-                <text class="history-meta">{{ session.durationMinutes }} 分钟 · {{ session.completed ? '已完成' : '未完成' }}</text>
+                <input v-if="editingHistoryId === session.id" v-model="historyTask" class="history-edit" @confirm="saveHistoryEdit" />
+                <text v-else class="history-task">{{ session.task }}</text>
+                <text class="history-meta">{{ Math.round((session.actualSeconds ?? session.durationMinutes * 60) / 60) }} 分钟</text>
               </view>
-              <button class="history-delete" @tap.stop="deleteSession(session.id)">删除</button>
+              <view class="history-actions">
+                <button v-if="editingHistoryId === session.id" class="history-delete" @tap.stop="saveHistoryEdit">保存</button>
+                <button v-else class="history-delete" @tap.stop="startHistoryEdit(session.id, session.task)">修改</button>
+                <button class="history-delete" @tap.stop="deleteSession(session.id)">删除</button>
+              </view>
             </view>
           </view>
         </scroll-view>
@@ -224,7 +268,7 @@ function deleteSession(id: string) {
         >
           <view class="dial-inner">
             <text class="dial-time">{{ formattedTime }}</text>
-            <text class="dial-state">{{ running ? '专注中' : started ? '已暂停' : '待开始' }}</text>
+            <text class="dial-state">{{ stateLabel }}</text>
           </view>
         </view>
       </view>
@@ -235,9 +279,11 @@ function deleteSession(id: string) {
       </view>
 
       <view class="actions">
-        <button v-if="!running" class="primary-action" @tap.stop="startOrResume">{{ started ? '继续' : '开始' }}</button>
+        <button v-if="elapsed" class="primary-action" @tap.stop="extendSession">再 5 分钟</button>
+        <button v-else-if="!running" class="primary-action" @tap.stop="startOrResume">{{ started ? '继续' : '开始' }}</button>
         <button v-else class="secondary-action" @tap.stop="pauseTimer">暂停</button>
         <button class="complete-action" @tap.stop="completeSession">完成</button>
+        <button class="abandon-action" @tap.stop="abandonSession">放弃</button>
       </view>
     </view>
   </view>
@@ -354,6 +400,7 @@ input {
 
 .history-head {
   display: flex;
+  min-width: 0;
   justify-content: space-between;
   gap: 10px;
 }
@@ -373,7 +420,7 @@ input {
 .history-list {
   display: block;
   width: 100%;
-  height: 84px;
+  height: 76px;
   min-height: 0;
 }
 
@@ -383,7 +430,7 @@ input {
 
 .history-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 44px;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   border-bottom: 1px solid #e5edf4;
@@ -433,9 +480,20 @@ input {
 
 .run-panel {
   display: grid;
-  min-height: 228px;
+  min-height: 206px;
   grid-template-rows: minmax(0, 1fr) auto auto;
   gap: 9px;
+}
+
+.history-actions {
+  display: flex;
+  gap: 3px;
+}
+
+.history-edit {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 6px;
 }
 
 .dial-shell {
@@ -495,8 +553,65 @@ input {
 
 .actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
+}
+
+.abandon-action {
+  height: 34px;
+  min-height: 34px;
+  border: 1px solid rgba(138, 89, 96, 0.24);
+  border-radius: 8px;
+  background: rgba(138, 89, 96, 0.08);
+  color: #8a5960;
+  font-size: 13px;
+  line-height: 34px;
+}
+
+@media (max-width: 360px) {
+  .idle-panel {
+    gap: 8px;
+  }
+
+  .duration-row {
+    grid-template-columns: auto 48px minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .duration-buttons {
+    gap: 4px;
+  }
+
+  .run-panel {
+    min-height: 198px;
+    gap: 7px;
+  }
+
+  .dial {
+    width: 126px;
+    height: 126px;
+  }
+
+  .dial-inner {
+    width: 94px;
+    height: 94px;
+  }
+
+  .dial-time {
+    font-size: 25px;
+  }
+
+  .task {
+    font-size: 14px;
+  }
+
+  .duration-buttons button,
+  .primary-button,
+  .primary-action,
+  .secondary-action,
+  .complete-action {
+    font-size: 12px;
+  }
 }
 
 .compact .idle-panel,
@@ -505,21 +620,25 @@ input {
 }
 
 .compact .history-list {
-  height: 64px;
+  height: 56px;
+}
+
+.compact .run-panel {
+  min-height: 178px;
 }
 
 .compact .dial {
-  width: 118px;
-  height: 118px;
+  width: 108px;
+  height: 108px;
 }
 
 .compact .dial-inner {
-  width: 88px;
-  height: 88px;
+  width: 80px;
+  height: 80px;
 }
 
 .compact .dial-time {
-  font-size: 24px;
+  font-size: 22px;
 }
 
 .compact input,

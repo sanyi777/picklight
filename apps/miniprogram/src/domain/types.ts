@@ -10,6 +10,7 @@ export interface Todo {
   time: string;
   content: string;
   completed: boolean;
+  completedAt?: ISODateTime;
   rolledOverFrom?: ISODate;
   sourceScrapId?: ID;
   createdAt: ISODateTime;
@@ -18,11 +19,13 @@ export interface Todo {
 
 export interface Scrap {
   id: ID;
+  date: ISODate;
   category: ScrapCategory;
   content: string;
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
   linkedTodoId?: ID;
+  todoCompleted?: boolean;
 }
 
 export interface DailyAnchor {
@@ -41,8 +44,12 @@ export interface FocusSession {
   anchorId?: ID;
   task: string;
   durationMinutes: number;
+  status?: 'idle' | 'running' | 'paused' | 'completed';
   startedAt?: ISODateTime;
+  pausedAt?: ISODateTime;
+  pausedTotalSeconds?: number;
   completedAt?: ISODateTime;
+  actualSeconds?: number;
   completed: boolean;
   distractions: string[];
   createdAt: ISODateTime;
@@ -55,4 +62,11 @@ export interface PicklightState {
   anchors: DailyAnchor[];
   focusSessions: FocusSession[];
   activeDate: ISODate;
+}
+
+export interface PicklightBackup {
+  app: 'picklight';
+  schemaVersion: 2;
+  exportedAt: ISODateTime;
+  state: PicklightState;
 }

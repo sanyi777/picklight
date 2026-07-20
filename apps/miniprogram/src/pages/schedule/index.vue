@@ -1,15 +1,20 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import AnchorCard from '@/components/AnchorCard.vue';
+import CoverScreenMode from '@/components/CoverScreenMode.vue';
 import MiniProgramShell from '@/components/MiniProgramShell.vue';
+import TodoTimePicker from '@/components/TodoTimePicker.vue';
 import TodoItem from '@/components/TodoItem.vue';
 import WeekStrip from '@/components/WeekStrip.vue';
+import { useViewportProfile } from '@/composables/useViewportProfile';
 import { todayISODate } from '@/domain/date';
 import { usePicklightStore } from '@/stores/usePicklightStore';
 
 const store = usePicklightStore();
+const { isCoverScreen } = useViewportProfile();
 const todoContent = ref('');
-const todoTime = ref('');
+const todoHasTime = ref(false);
+const todoTime = ref('09:00');
 const anchorTitle = ref('');
 const review = ref('');
 const weekStartDate = todayISODate();
@@ -22,9 +27,10 @@ function submitTodo() {
     return;
   }
 
-  store.addTodo(todoContent.value, todoTime.value);
+  store.addTodo(todoContent.value, todoHasTime.value ? todoTime.value : '');
   todoContent.value = '';
-  todoTime.value = '';
+  todoHasTime.value = false;
+  todoTime.value = '09:00';
 }
 
 function submitAnchor() {
@@ -58,8 +64,10 @@ onMounted(() => {
 </script>
 
 <template>
-  <MiniProgramShell active="schedule">
-    <view class="schedule-view">
+  <view class="page-root">
+    <CoverScreenMode v-if="isCoverScreen" />
+    <MiniProgramShell v-else active="schedule">
+      <view class="schedule-view">
       <section class="card day-plan">
         <view class="section-head">
           <view>
@@ -97,10 +105,12 @@ onMounted(() => {
         </scroll-view>
         <view v-else class="empty-plan">这一天还没有待办</view>
 
-        <view class="add-plan">
-          <input v-model="todoTime" placeholder="时间" />
-          <input v-model="todoContent" placeholder="添加一条待办" @confirm="submitTodo" />
-          <button class="secondary" @click="submitTodo">添加</button>
+        <view class="todo-create">
+          <view class="add-plan">
+            <input v-model="todoContent" placeholder="添加一条待办" @confirm="submitTodo" />
+            <button class="secondary" @click="submitTodo">添加</button>
+          </view>
+          <TodoTimePicker v-model:has-time="todoHasTime" v-model:time="todoTime" />
         </view>
       </section>
 
@@ -121,11 +131,18 @@ onMounted(() => {
         <input v-model="review" placeholder="写一条今日复盘" @confirm="submitReview" />
         <button class="secondary" @click="submitReview">归档</button>
       </view>
-    </view>
-  </MiniProgramShell>
+      </view>
+    </MiniProgramShell>
+  </view>
 </template>
 
 <style scoped lang="scss">
+.page-root {
+  height: 100vh;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
 .schedule-view {
   display: grid;
   height: 100%;
@@ -224,9 +241,14 @@ onMounted(() => {
   font-size: 13px;
 }
 
+.todo-create {
+  display: grid;
+  gap: 7px;
+}
+
 .add-plan {
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 7px;
   align-items: center;
 }
@@ -265,5 +287,35 @@ input {
   font-size: 13px;
   font-weight: 750;
   line-height: 36px;
+}
+
+@media (max-width: 360px) {
+  .schedule-view {
+    grid-template-rows: minmax(0, 1fr) 100px 58px;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .day-plan,
+  .review-card {
+    padding: 10px;
+  }
+
+  .week-panel {
+    padding: 9px 10px;
+  }
+
+  .page-title {
+    font-size: 25px;
+  }
+
+  .add-plan {
+    grid-template-columns: minmax(0, 1fr) 52px;
+    gap: 5px;
+  }
+
+  .secondary {
+    padding: 0 8px;
+  }
 }
 </style>

@@ -9,6 +9,7 @@ describe('scraps', () => {
       category: '待办',
       content: '整理需求',
       today: '2026-07-05',
+      todoTime: '18:30',
       now: '2026-07-05T08:00:00.000Z'
     });
 
@@ -17,6 +18,7 @@ describe('scraps', () => {
       id: 'todo-1',
       sourceScrapId: 'scrap-1',
       date: '2026-07-05',
+      time: '18:30',
       content: '整理需求'
     });
   });

@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import CoverScreenMode from '@/components/CoverScreenMode.vue';
 import MiniProgramShell from '@/components/MiniProgramShell.vue';
 import ScrapComposer from '@/components/ScrapComposer.vue';
 import ScrapItem from '@/components/ScrapItem.vue';
+import { useViewportProfile } from '@/composables/useViewportProfile';
 import type { ScrapCategory } from '@/domain/types';
 import { usePicklightStore } from '@/stores/usePicklightStore';
 
 const store = usePicklightStore();
+const { isCoverScreen } = useViewportProfile();
 const categories: Array<ScrapCategory | '全部'> = ['全部', '随想', '灵感', '待办', '分心', '复盘'];
 const selectedCategory = ref<ScrapCategory | '全部'>('全部');
 
@@ -22,8 +25,10 @@ onMounted(() => {
 </script>
 
 <template>
-  <MiniProgramShell active="scraps">
-    <view class="scraps-view">
+  <view class="page-root">
+    <CoverScreenMode v-if="isCoverScreen" />
+    <MiniProgramShell v-else active="scraps">
+      <view class="scraps-view">
       <section class="card scrap-compose">
         <view class="section-head">
           <view>
@@ -39,22 +44,25 @@ onMounted(() => {
           <text class="section-title-main">收纳箱</text>
           <text class="date">按最近创建排序</text>
         </view>
-        <view class="filter-row">
-          <button
-            v-for="category in categories"
-            :key="category"
-            :class="['filter', { active: selectedCategory === category }]"
-            @click="selectedCategory = category"
-          >
-            {{ category }}
-          </button>
-        </view>
+        <scroll-view scroll-x enable-flex class="filter-scroll">
+          <view class="filter-row">
+            <button
+              v-for="category in categories"
+              :key="category"
+              :class="['filter', { active: selectedCategory === category }]"
+              @click="selectedCategory = category"
+            >
+              {{ category }}
+            </button>
+          </view>
+        </scroll-view>
         <scroll-view v-if="visibleScraps.length" scroll-y class="scrap-list">
           <view class="scrap-scroll-inner">
             <ScrapItem
               v-for="scrap in visibleScraps"
               :key="scrap.id"
               :scrap="scrap"
+              :todo-time="store.getLinkedTodoTime(scrap)"
               @update="store.updateScrap"
               @delete="store.deleteScrap"
             />
@@ -62,16 +70,23 @@ onMounted(() => {
         </scroll-view>
         <view v-else class="empty-list">还没有这一类记录</view>
       </section>
-    </view>
-  </MiniProgramShell>
+      </view>
+    </MiniProgramShell>
+  </view>
 </template>
 
 <style scoped lang="scss">
+.page-root {
+  height: 100vh;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
 .scraps-view {
   display: grid;
   height: 100%;
   min-height: 0;
-  grid-template-rows: 222px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
   overflow: hidden;
   padding: 12px;
@@ -88,8 +103,9 @@ onMounted(() => {
 .scrap-compose {
   display: grid;
   min-height: 0;
+  grid-template-rows: auto auto;
   gap: 10px;
-  overflow: hidden;
+  overflow: visible;
   padding: 12px 14px;
 }
 
@@ -132,9 +148,17 @@ onMounted(() => {
   padding: 12px;
 }
 
+.filter-scroll {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  white-space: nowrap;
+}
+
 .filter-row {
-  display: flex;
-  flex-wrap: wrap;
+  display: inline-flex;
+  min-width: max-content;
   gap: 5px;
 }
 
@@ -184,7 +208,7 @@ onMounted(() => {
 }
 
 .scrap-compose :deep(textarea) {
-  height: 84px;
+  height: 78px;
   padding: 11px 13px;
   font-size: 14px;
 }
@@ -196,6 +220,10 @@ onMounted(() => {
 
 .scrap-compose :deep(.category-row) {
   gap: 5px;
+}
+
+.scrap-compose :deep(.category-scroll) {
+  height: 28px;
 }
 
 .scrap-compose :deep(.category-chip) {
@@ -213,5 +241,44 @@ onMounted(() => {
   min-height: 36px;
   font-size: 13px;
   line-height: 36px;
+}
+
+@media (max-width: 360px) {
+  .scraps-view {
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .scrap-compose,
+  .scrap-list-card {
+    padding: 10px;
+  }
+
+  .page-title {
+    font-size: 26px;
+  }
+
+  .section-title-main {
+    font-size: 16px;
+  }
+
+  .scrap-compose :deep(.composer-actions) {
+    grid-template-columns: minmax(0, 1fr) 76px;
+  }
+
+  .scrap-compose :deep(.save-button) {
+    width: 76px;
+  }
+
+  .scrap-compose :deep(textarea) {
+    height: 72px;
+    padding: 9px 11px;
+  }
+
+  .scrap-compose :deep(.todo-time-picker) {
+    grid-template-columns: 52px 52px minmax(0, 1fr);
+    gap: 5px;
+  }
 }
 </style>

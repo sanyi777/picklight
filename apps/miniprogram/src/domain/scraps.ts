@@ -9,6 +9,7 @@ export interface CreateScrapInput {
   today: ISODate;
   now?: ISODateTime;
   todoId?: ID;
+  todoTime?: string;
 }
 
 export interface CreateScrapResult {
@@ -29,6 +30,7 @@ export function createScrap(input: CreateScrapInput): CreateScrapResult {
   const linkedTodoId = input.category === '待办' ? input.todoId : undefined;
   const scrap: Scrap = {
     id: input.id,
+    date: input.today,
     category: input.category,
     content: trimmedContent,
     linkedTodoId,
@@ -45,6 +47,7 @@ export function createScrap(input: CreateScrapInput): CreateScrapResult {
     todo: createTodo({
       id: input.todoId,
       date: input.today,
+      time: input.todoTime,
       content: trimmedContent,
       sourceScrapId: input.id,
       now: timestamp

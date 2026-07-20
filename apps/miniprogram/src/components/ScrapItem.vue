@@ -1,19 +1,22 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import TodoTimePicker from '@/components/TodoTimePicker.vue';
 import type { ID, Scrap, ScrapCategory } from '@/domain/types';
 
 const props = withDefaults(
   defineProps<{
     scrap: Scrap;
     hideCategory?: boolean;
+    todoTime?: string;
   }>(),
   {
-    hideCategory: false
+    hideCategory: false,
+    todoTime: ''
   }
 );
 
 const emit = defineEmits<{
-  update: [id: ID, category: ScrapCategory, content: string];
+  update: [id: ID, category: ScrapCategory, content: string, time?: string];
   delete: [id: ID];
 }>();
 
@@ -21,10 +24,14 @@ const categories: ScrapCategory[] = ['随想', '灵感', '待办', '分心', '�
 const editing = ref(false);
 const draftCategory = ref<ScrapCategory>(props.scrap.category);
 const draftContent = ref(props.scrap.content);
+const draftTodoHasTime = ref(false);
+const draftTodoTime = ref('09:00');
 
 function startEdit() {
   draftCategory.value = props.scrap.category;
   draftContent.value = props.scrap.content;
+  draftTodoHasTime.value = props.scrap.category === '待办' && Boolean(props.todoTime);
+  draftTodoTime.value = props.todoTime || '09:00';
   editing.value = true;
 }
 
@@ -37,7 +44,13 @@ function saveEdit() {
     return;
   }
 
-  emit('update', props.scrap.id, draftCategory.value, draftContent.value);
+  emit(
+    'update',
+    props.scrap.id,
+    draftCategory.value,
+    draftContent.value,
+    draftCategory.value === '待办' && draftTodoHasTime.value ? draftTodoTime.value : ''
+  );
   editing.value = false;
 }
 
@@ -72,16 +85,19 @@ function confirmDelete() {
 
     <view v-else class="edit-mode">
       <textarea v-model="draftContent" maxlength="500" />
-      <view class="category-row">
-        <button
-          v-for="item in categories"
-          :key="item"
-          :class="['category-chip', { active: draftCategory === item }]"
-          @tap.stop="draftCategory = item"
-        >
-          {{ item }}
-        </button>
-      </view>
+      <scroll-view scroll-x enable-flex class="category-scroll">
+        <view class="category-row">
+          <button
+            v-for="item in categories"
+            :key="item"
+            :class="['category-chip', { active: draftCategory === item }]"
+            @tap.stop="draftCategory = item"
+          >
+            {{ item }}
+          </button>
+        </view>
+      </scroll-view>
+      <TodoTimePicker v-if="draftCategory === '待办'" v-model:has-time="draftTodoHasTime" v-model:time="draftTodoTime" compact />
       <view class="edit-actions">
         <button class="ghost-action" @tap.stop="cancelEdit">取消</button>
         <button class="save-action" @tap.stop="saveEdit">保存</button>
@@ -108,6 +124,7 @@ function confirmDelete() {
 
 .item-top {
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
@@ -120,6 +137,7 @@ function confirmDelete() {
 }
 
 .category {
+  flex: 0 0 auto;
   width: fit-content;
   border-radius: 999px;
   padding: 2px 8px;
@@ -138,6 +156,9 @@ function confirmDelete() {
 .inline-content {
   min-width: 0;
   flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 textarea {
@@ -152,9 +173,17 @@ textarea {
   line-height: 1.45;
 }
 
+.category-scroll {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  white-space: nowrap;
+}
+
 .category-row {
-  display: flex;
-  flex-wrap: wrap;
+  display: inline-flex;
+  min-width: max-content;
   gap: 6px;
 }
 

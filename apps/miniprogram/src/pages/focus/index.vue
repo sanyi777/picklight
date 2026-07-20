@@ -1,19 +1,23 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 import AnchorCard from '@/components/AnchorCard.vue';
+import CoverScreenMode from '@/components/CoverScreenMode.vue';
 import MiniProgramShell from '@/components/MiniProgramShell.vue';
 import PomodoroPanel from '@/components/PomodoroPanel.vue';
 import ScrapItem from '@/components/ScrapItem.vue';
+import { useViewportProfile } from '@/composables/useViewportProfile';
+import { todayISODate } from '@/domain/date';
 import { usePicklightStore } from '@/stores/usePicklightStore';
 
 const store = usePicklightStore();
+const { isCoverScreen } = useViewportProfile();
 const anchorTitle = ref('');
 const distraction = ref('');
 const focusSessionsForDate = computed(() =>
   store.state.focusSessions.filter((session) => session.date === store.activeDate)
 );
 const latestSession = computed(() => [...focusSessionsForDate.value].reverse().find((session) => !session.completed));
-const distractions = computed(() => store.allScraps.filter((scrap) => scrap.category === '分心').slice(0, 4));
+const distractions = computed(() => store.allScraps.filter((scrap) => scrap.category === '分心' && scrap.date === store.activeDate));
 const canAddAnchor = computed(() => store.todayAnchors.length < 2);
 const hasTwoAnchors = computed(() => store.todayAnchors.length >= 2);
 
@@ -44,12 +48,15 @@ function recordDistraction() {
 
 onMounted(() => {
   store.hydrate();
+  store.setActiveDate(todayISODate());
 });
 </script>
 
 <template>
-  <MiniProgramShell active="focus">
-    <view :class="['focus-view', { 'two-anchors': hasTwoAnchors }]">
+  <view class="page-root">
+    <CoverScreenMode v-if="isCoverScreen" />
+    <MiniProgramShell v-else active="focus">
+      <view :class="['focus-view', { 'two-anchors': hasTwoAnchors }]">
       <section class="card focus-anchor-card">
         <view class="section-head">
           <view>
@@ -83,7 +90,11 @@ onMounted(() => {
           :sessions="focusSessionsForDate"
           @create="store.createFocus"
           @start="store.startFocus"
+          @pause="store.pauseFocus"
+          @extend="store.extendFocus"
           @complete="store.completeFocus"
+          @abandon="store.abandonFocus"
+          @update="store.updateFocusTask"
           @delete="store.deleteFocus"
         />
       </section>
@@ -101,6 +112,7 @@ onMounted(() => {
             v-for="scrap in distractions"
             :key="scrap.id"
             :scrap="scrap"
+            :todo-time="store.getLinkedTodoTime(scrap)"
             hide-category
             @update="store.updateScrap"
             @delete="store.deleteScrap"
@@ -108,23 +120,31 @@ onMounted(() => {
         </scroll-view>
         <view v-else class="empty-line">暂无分心记录</view>
       </section>
-    </view>
-  </MiniProgramShell>
+      </view>
+    </MiniProgramShell>
+  </view>
 </template>
 
 <style scoped lang="scss">
+.page-root {
+  height: 100vh;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
 .focus-view {
   display: grid;
   height: 100%;
   min-height: 0;
-  grid-template-rows: 220px auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(132px, auto);
+  align-content: start;
   gap: 10px;
-  overflow: hidden;
+  overflow-y: auto;
   padding: 12px;
 }
 
 .focus-view.two-anchors {
-  grid-template-rows: 246px auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(132px, auto);
 }
 
 .card {
@@ -137,10 +157,15 @@ onMounted(() => {
 
 .focus-anchor-card {
   display: grid;
+  max-height: 220px;
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 5px;
   overflow: hidden;
   padding: 9px 12px;
+}
+
+.two-anchors .focus-anchor-card {
+  max-height: 236px;
 }
 
 .section-head {
@@ -204,7 +229,7 @@ input {
 .pomodoro-card {
   display: grid;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
   padding: 12px;
 }
 
@@ -214,6 +239,8 @@ input {
 
 .distraction-card {
   display: grid;
+  min-height: 132px;
+  max-height: 210px;
   grid-template-rows: auto auto minmax(0, 1fr);
   gap: 8px;
   overflow: hidden;
@@ -250,5 +277,70 @@ input {
   font-size: 13px;
   font-weight: 750;
   line-height: 36px;
+}
+
+@media (max-width: 360px) {
+  .focus-view {
+    grid-template-rows: auto auto minmax(128px, auto);
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .focus-view.two-anchors {
+    grid-template-rows: auto auto minmax(128px, auto);
+  }
+
+  .focus-anchor-card,
+  .distraction-card {
+    padding: 8px 10px;
+  }
+
+  .pomodoro-card,
+  .two-anchors .pomodoro-card {
+    padding: 8px;
+  }
+
+  .page-title {
+    font-size: 25px;
+  }
+
+  .section-title-main {
+    font-size: 16px;
+  }
+
+  .anchor-add,
+  .distraction-form {
+    grid-template-columns: minmax(0, 1fr) 52px;
+    gap: 6px;
+  }
+
+  .secondary {
+    padding: 0 8px;
+  }
+}
+
+@media (max-height: 760px) {
+  .focus-view {
+    height: 100%;
+    grid-template-rows: auto auto minmax(128px, auto);
+    overflow-y: auto;
+  }
+
+  .focus-view.two-anchors {
+    grid-template-rows: auto auto minmax(128px, auto);
+  }
+
+  .focus-anchor-card {
+    max-height: 176px;
+  }
+
+  .two-anchors .focus-anchor-card {
+    max-height: 196px;
+  }
+
+  .distraction-card {
+    min-height: 128px;
+    max-height: 176px;
+  }
 }
 </style>

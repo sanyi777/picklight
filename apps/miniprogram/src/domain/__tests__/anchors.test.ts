@@ -5,7 +5,8 @@ import {
   deleteAnchor,
   setCurrentAnchor,
   updateAnchorProgress,
-  updateAnchorTitle
+  updateAnchorTitle,
+  rollDailyAnchors
 } from '../anchors';
 
 describe('anchors', () => {
@@ -49,5 +50,16 @@ describe('anchors', () => {
 
     expect(updateAnchorProgress(anchors, 'a', 140)[0].progress).toBe(100);
     expect(updateAnchorProgress(anchors, 'a', -20)[0].progress).toBe(0);
+  });
+
+  it('carries unfinished anchors forward and clears completed ones', () => {
+    const anchors = [
+      { ...createDailyAnchor({ id: 'carry', date: '2026-07-05', title: '继续', now: '2026-07-05T08:00:00.000Z' }), progress: 40 },
+      { ...createDailyAnchor({ id: 'done', date: '2026-07-05', title: '完成', now: '2026-07-05T08:00:00.000Z' }), progress: 100 }
+    ];
+
+    expect(rollDailyAnchors(anchors, '2026-07-05', '2026-07-06T00:00:00.000Z')).toEqual([
+      expect.objectContaining({ id: 'carry', date: '2026-07-06', progress: 40 })
+    ]);
   });
 });

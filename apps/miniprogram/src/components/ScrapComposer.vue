@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import TodoTimePicker from '@/components/TodoTimePicker.vue';
 import type { ScrapCategory } from '@/domain/types';
 
 const props = withDefaults(
@@ -16,12 +17,14 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
-  submit: [category: ScrapCategory, content: string];
+  submit: [category: ScrapCategory, content: string, time?: string];
 }>();
 
 const categories: ScrapCategory[] = ['随想', '灵感', '待办', '分心', '复盘'];
 const category = ref<ScrapCategory>(props.defaultCategory);
 const content = ref('');
+const todoHasTime = ref(false);
+const todoTime = ref('09:00');
 
 function submit() {
   const trimmed = content.value.trim();
@@ -29,8 +32,10 @@ function submit() {
     return;
   }
 
-  emit('submit', category.value, trimmed);
+  emit('submit', category.value, trimmed, category.value === '待办' && todoHasTime.value ? todoTime.value : '');
   content.value = '';
+  todoHasTime.value = false;
+  todoTime.value = '09:00';
 }
 </script>
 
@@ -44,23 +49,27 @@ function submit() {
         <button class="save-button" @click="submit">保存</button>
       </view>
       <textarea v-model="content" :placeholder="placeholder" maxlength="500" />
+      <TodoTimePicker v-if="category === '待办'" v-model:has-time="todoHasTime" v-model:time="todoTime" compact />
     </template>
 
     <template v-else>
       <textarea v-model="content" :placeholder="placeholder" maxlength="500" />
       <view class="composer-actions">
-        <view class="category-row">
-          <button
-            v-for="item in categories"
-            :key="item"
-            :class="['category-chip', { active: category === item }]"
-            @click="category = item"
-          >
-            {{ item }}
-          </button>
-        </view>
+        <scroll-view scroll-x enable-flex class="category-scroll">
+          <view class="category-row">
+            <button
+              v-for="item in categories"
+              :key="item"
+              :class="['category-chip', { active: category === item }]"
+              @click="category = item"
+            >
+              {{ item }}
+            </button>
+          </view>
+        </scroll-view>
         <button class="save-button" @click="submit">＋ 收纳</button>
       </view>
+      <TodoTimePicker v-if="category === '待办'" v-model:has-time="todoHasTime" v-model:time="todoTime" />
     </template>
   </view>
 </template>
@@ -90,9 +99,17 @@ textarea {
   align-items: start;
 }
 
+.category-scroll {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  white-space: nowrap;
+}
+
 .category-row {
-  display: flex;
-  flex-wrap: wrap;
+  display: inline-flex;
+  min-width: max-content;
   gap: 6px;
 }
 

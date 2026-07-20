@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import DemoTabBar from './DemoTabBar.vue';
 
-defineProps<{
+withDefaults(defineProps<{
   active: 'home' | 'scraps' | 'schedule' | 'focus';
-}>();
+  hideTabs?: boolean;
+}>(), {
+  hideTabs: false
+});
 </script>
 
 <template>
@@ -18,7 +21,7 @@ defineProps<{
       <slot />
     </view>
 
-    <DemoTabBar :active="active" />
+    <DemoTabBar v-if="!hideTabs" :active="active" />
   </view>
 </template>
 
@@ -35,7 +38,7 @@ defineProps<{
 
 .wx-bar {
   border-bottom: 1px solid rgba(220, 228, 236, 0.86);
-  padding: var(--status-bar-height) 14px 0;
+  padding: var(--status-bar-height) max(10px, env(safe-area-inset-left)) 0;
   background: rgba(255, 255, 255, 0.94);
 }
 
@@ -57,5 +60,15 @@ defineProps<{
   min-height: 0;
   overflow: hidden;
   background: #f5f8fb;
+}
+
+@media (max-width: 360px) {
+  .title-row {
+    height: 40px;
+  }
+
+  .app-title {
+    font-size: 18px;
+  }
 }
 </style>

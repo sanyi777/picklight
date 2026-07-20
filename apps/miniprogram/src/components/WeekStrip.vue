@@ -39,7 +39,7 @@ const days = computed(() =>
 .week-strip {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 4px;
+  gap: 3px;
 }
 
 .day-button {
@@ -78,5 +78,23 @@ const days = computed(() =>
 
 .day-label {
   line-height: 18px;
+}
+
+@media (max-width: 360px) {
+  .day-button {
+    height: 40px;
+    grid-template-rows: 16px 14px;
+    padding: 4px 1px;
+    font-size: 9px;
+  }
+
+  .day-label,
+  .count {
+    line-height: 14px;
+  }
+
+  .day-label {
+    line-height: 16px;
+  }
 }
 </style>

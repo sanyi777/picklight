@@ -13,12 +13,6 @@
       }
     },
     {
-      "path": "pages/schedule/index",
-      "style": {
-        "navigationBarTitleText": "日程"
-      }
-    },
-    {
       "path": "pages/focus/index",
       "style": {
         "navigationBarTitleText": "专注"

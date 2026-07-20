@@ -28,7 +28,7 @@ export function createTodo(input: CreateTodoInput): Todo {
 export function getTodosForDate(todos: Todo[], date: ISODate): Todo[] {
   return todos
     .filter((todo) => todo.date === date)
-    .sort((a, b) => compareTodoTime(a.time, b.time));
+    .sort(compareTodos);
 }
 
 export function toggleTodo(todos: Todo[], id: ID, completed: boolean, now = nowISODateTime()): Todo[] {
@@ -37,6 +37,7 @@ export function toggleTodo(todos: Todo[], id: ID, completed: boolean, now = nowI
       ? {
           ...todo,
           completed,
+          completedAt: completed ? now : undefined,
           updatedAt: now
         }
       : todo
@@ -46,14 +47,19 @@ export function toggleTodo(todos: Todo[], id: ID, completed: boolean, now = nowI
 export function rollUnfinishedTodos(todos: Todo[], fromDate: ISODate, now = nowISODateTime()): Todo[] {
   const nextDate = addDays(fromDate, 1);
 
-  return todos.map((todo) => {
-    if (todo.date !== fromDate || todo.completed) {
+  return todos.flatMap((todo) => {
+    if (todo.date !== fromDate) {
       return todo;
+    }
+
+    if (todo.completed) {
+      return [];
     }
 
     return {
       ...todo,
       date: nextDate,
+      time: '',
       rolledOverFrom: todo.rolledOverFrom ?? fromDate,
       updatedAt: now
     };
@@ -85,4 +91,21 @@ function compareTodoTime(a: string, b: string): number {
   }
 
   return a.localeCompare(b);
+}
+
+function compareTodos(a: Todo, b: Todo): number {
+  if (a.completed !== b.completed) {
+    return a.completed ? 1 : -1;
+  }
+
+  if (a.completed && b.completed) {
+    return (b.completedAt ?? b.updatedAt).localeCompare(a.completedAt ?? a.updatedAt);
+  }
+
+  const timeOrder = compareTodoTime(a.time, b.time);
+  if (timeOrder !== 0) {
+    return timeOrder;
+  }
+
+  return b.createdAt.localeCompare(a.createdAt);
 }

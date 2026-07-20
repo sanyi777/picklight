@@ -24,14 +24,46 @@ describe('usePicklightStore', () => {
     const store = usePicklightStore();
     store.state.activeDate = '2026-07-05';
 
-    const result = store.addScrap('待办', '整理小程序 MVP');
+    const result = store.addScrap('待办', '整理小程序 MVP', '16:30');
 
     expect(result.todo).toBeDefined();
     expect(store.todayTodos).toHaveLength(1);
     expect(store.todayTodos[0]).toMatchObject({
       date: '2026-07-05',
+      time: '16:30',
       content: '整理小程序 MVP',
       sourceScrapId: result.scrap.id
+    });
+  });
+
+  it('turns an edited scrap into a timed todo', () => {
+    const store = usePicklightStore();
+    store.state.activeDate = '2026-07-05';
+    const result = store.addScrap('随想', '整理小程序 MVP');
+
+    store.updateScrap(result.scrap.id, '待办', '整理小程序 MVP', '18:45');
+
+    expect(store.todayTodos).toHaveLength(1);
+    expect(store.todayTodos[0]).toMatchObject({
+      date: '2026-07-05',
+      time: '18:45',
+      content: '整理小程序 MVP',
+      sourceScrapId: result.scrap.id
+    });
+    expect(store.state.scraps[0].linkedTodoId).toBe(store.todayTodos[0].id);
+  });
+
+  it('syncs todo time when editing a linked todo scrap', () => {
+    const store = usePicklightStore();
+    store.state.activeDate = '2026-07-05';
+    const result = store.addScrap('待办', '整理小程序 MVP', '16:30');
+
+    store.updateScrap(result.scrap.id, '待办', '整理小程序 MVP 复查', '');
+
+    expect(store.todayTodos).toHaveLength(1);
+    expect(store.todayTodos[0]).toMatchObject({
+      time: '',
+      content: '整理小程序 MVP 复查'
     });
   });
 
@@ -59,7 +91,49 @@ describe('usePicklightStore', () => {
 
     expect(store.state.todos).toHaveLength(0);
     expect(store.state.scraps).toHaveLength(0);
-    expect(uni.removeStorageSync).toHaveBeenCalledWith('picklight-state-v1');
+    expect(uni.removeStorageSync).toHaveBeenCalledWith('picklight-state-v2');
+  });
+
+  it('keeps todo and scrap records linked when completing or deleting a todo', () => {
+    const store = usePicklightStore();
+    const { todo } = store.addScrap('待办', '同步事项');
+
+    store.setTodoCompleted(todo!.id, true);
+    expect(store.state.scraps[0].todoCompleted).toBe(true);
+
+    store.deleteTodo(todo!.id);
+    expect(store.state.todos).toHaveLength(0);
+    expect(store.state.scraps).toHaveLength(0);
+  });
+
+  it('exports and imports a full local backup', () => {
+    const sourceStore = usePicklightStore();
+    sourceStore.state.activeDate = '2026-07-09';
+    sourceStore.addTodo('准备 v0.2 正式版');
+    sourceStore.addScrap('灵感', '先保护数据');
+
+    const rawBackup = sourceStore.exportBackupText();
+    const backup = JSON.parse(rawBackup);
+
+    expect(backup).toMatchObject({
+      app: 'picklight',
+      schemaVersion: 2
+    });
+
+    setActivePinia(createPinia());
+    const targetStore = usePicklightStore();
+    targetStore.addTodo('保留的本地数据');
+
+    targetStore.importBackupText(rawBackup);
+
+    expect(targetStore.state.activeDate).toBeTruthy();
+    expect(targetStore.state.todos).toHaveLength(2);
+    expect(targetStore.state.todos.map((todo) => todo.content)).toEqual(expect.arrayContaining(['准备 v0.2 正式版', '保留的本地数据']));
+    expect(targetStore.state.scraps).toHaveLength(1);
+    expect(targetStore.state.scraps[0]).toMatchObject({
+      category: '灵感',
+      content: '先保护数据'
+    });
   });
 
   it('rolls unfinished todos to real today during hydrate', () => {

@@ -92,6 +92,7 @@ function confirmDelete() {
 .anchor-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 44px;
+  min-width: 0;
   gap: 7px;
   align-items: start;
 }
@@ -148,6 +149,7 @@ textarea {
 
 .anchor-actions {
   display: grid;
+  width: 44px;
   gap: 4px;
 }
 
@@ -178,5 +180,31 @@ textarea {
 .save-action {
   background: #4a90d9;
   color: #ffffff;
+}
+
+@media (max-width: 360px) {
+  .anchor-card {
+    padding: 5px 7px;
+  }
+
+  .anchor-layout {
+    grid-template-columns: minmax(0, 1fr) 40px;
+    gap: 5px;
+  }
+
+  .anchor-actions {
+    width: 40px;
+  }
+
+  .ghost-action,
+  .danger-action,
+  .save-action {
+    width: 40px;
+    font-size: 10px;
+  }
+
+  .anchor-title {
+    font-size: 14px;
+  }
 }
 </style>

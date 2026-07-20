@@ -1,28 +1,64 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import AnchorCard from '@/components/AnchorCard.vue';
+import CoverScreenMode from '@/components/CoverScreenMode.vue';
 import MiniProgramShell from '@/components/MiniProgramShell.vue';
 import ScrapComposer from '@/components/ScrapComposer.vue';
+import TodoTimePicker from '@/components/TodoTimePicker.vue';
 import TodoItem from '@/components/TodoItem.vue';
 import WeekStrip from '@/components/WeekStrip.vue';
 import { parseISODate, todayISODate } from '@/domain/date';
+import { useViewportProfile } from '@/composables/useViewportProfile';
 import { usePicklightStore } from '@/stores/usePicklightStore';
 
 const store = usePicklightStore();
+const { isCoverScreen } = useViewportProfile();
 const todoContent = ref('');
+const todoHasTime = ref(false);
+const todoTime = ref('09:00');
+const anchorTitle = ref('');
+const review = ref('');
+const showGuide = ref(false);
+const showDataPanel = ref(false);
+const backupText = ref('');
+const importText = ref('');
 const weekStartDate = todayISODate();
 const currentFocusLabel = computed(() => store.currentAnchor?.title ?? '设置本轮专注事项');
 const scheduleTitle = computed(() => {
   if (store.activeDate === weekStartDate) {
-    return '今日日程';
+    return '今日待办';
   }
 
   const date = parseISODate(store.activeDate);
-  return `${date.getMonth() + 1}月${date.getDate()}日日程`;
+  return `${date.getMonth() + 1}月${date.getDate()}日待办`;
 });
+const canAddAnchor = computed(() => store.todayAnchors.length < 2);
 
 onMounted(() => {
   store.hydrate();
+  showGuide.value = !uni.getStorageSync('picklight-onboarding-v2');
 });
+
+function closeGuide() {
+  showGuide.value = false;
+  uni.setStorageSync('picklight-onboarding-v2', 'seen');
+}
+
+function submitAnchor() {
+  if (!anchorTitle.value.trim()) return;
+  try {
+    store.addAnchor(anchorTitle.value);
+    anchorTitle.value = '';
+  } catch (error) {
+    uni.showToast({ title: error instanceof Error ? error.message : '无法添加锚点', icon: 'none' });
+  }
+}
+
+function submitReview() {
+  if (!review.value.trim()) return;
+  store.archiveReview(review.value);
+  review.value = '';
+}
 
 function goFocus() {
   uni.redirectTo({ url: '/pages/focus/index' });
@@ -33,8 +69,94 @@ function submitTodo() {
     return;
   }
 
-  store.addTodo(todoContent.value);
+  store.addTodo(todoContent.value, todoHasTime.value ? todoTime.value : '');
   todoContent.value = '';
+  todoHasTime.value = false;
+  todoTime.value = '09:00';
+}
+
+function openDataPanel() {
+  backupText.value = store.exportBackupText();
+  importText.value = '';
+  showDataPanel.value = true;
+}
+
+function closeDataPanel() {
+  showDataPanel.value = false;
+}
+
+function refreshBackupText() {
+  backupText.value = store.exportBackupText();
+  uni.showToast({
+    title: '已刷新',
+    icon: 'success'
+  });
+}
+
+function copyBackupText() {
+  backupText.value = store.exportBackupText();
+  uni.setClipboardData({
+    data: backupText.value,
+    success: () => {
+      uni.showToast({
+        title: '已复制备份',
+        icon: 'success'
+      });
+    }
+  });
+}
+
+function pasteImportText() {
+  uni.getClipboardData({
+    success: (result) => {
+      importText.value = result.data;
+      uni.showToast({
+        title: '已粘贴',
+        icon: 'success'
+      });
+    }
+  });
+}
+
+function confirmImportData() {
+  const raw = importText.value.trim();
+  if (!raw) {
+    uni.showToast({
+      title: '请先粘贴备份',
+      icon: 'none'
+    });
+    return;
+  }
+
+  uni.showModal({
+    title: '导入数据',
+    content: '导入会合并到当前本地数据；内容完全相同的记录会保留本地版本。确认继续吗？',
+    confirmText: '导入',
+    confirmColor: '#2f72b4',
+    success: (result) => {
+      if (!result.confirm) {
+        return;
+      }
+
+      try {
+        store.importBackupText(raw);
+        backupText.value = store.exportBackupText();
+        importText.value = '';
+        showDataPanel.value = false;
+        uni.showToast({
+          title: '导入成功',
+          icon: 'success'
+        });
+      } catch (error) {
+        uni.showModal({
+          title: '导入失败',
+          content: error instanceof Error ? error.message : '备份内容无法识别',
+          showCancel: false,
+          confirmText: '知道了'
+        });
+      }
+    }
+  });
 }
 
 function confirmResetData() {
@@ -47,6 +169,7 @@ function confirmResetData() {
       if (result.confirm) {
         store.resetAllData();
         todoContent.value = '';
+        backupText.value = store.exportBackupText();
         uni.showToast({
           title: '已清空',
           icon: 'success'
@@ -58,15 +181,33 @@ function confirmResetData() {
 </script>
 
 <template>
-  <MiniProgramShell active="home">
-    <view class="home-view">
+  <view class="page-root">
+    <CoverScreenMode v-if="isCoverScreen" />
+    <MiniProgramShell v-else active="home">
+      <view class="home-view">
       <section class="card schedule-card">
         <view class="page-head">
           <view class="title-stack">
             <text class="date">{{ store.activeDate }} · 本地存储</text>
             <text class="page-title">{{ scheduleTitle }}</text>
           </view>
-          <button class="reset-action" @tap.stop="confirmResetData">重置</button>
+          <button class="data-action" @tap.stop="openDataPanel">数据</button>
+          <button class="guide-action" @tap.stop="showGuide = true">指引</button>
+        </view>
+
+        <view v-if="store.activeDate === weekStartDate" class="anchor-zone">
+          <AnchorCard
+            v-for="anchor in store.todayAnchors"
+            :key="anchor.id"
+            :anchor="anchor"
+            @progress="store.setAnchorProgress"
+            @rename="store.renameAnchor"
+            @delete="store.deleteAnchor"
+          />
+          <view v-if="canAddAnchor" class="anchor-add">
+            <input v-model="anchorTitle" placeholder="新增今日锚点，最多 2 条" @confirm="submitAnchor" />
+            <button class="secondary" @tap.stop="submitAnchor">新增</button>
+          </view>
         </view>
 
         <scroll-view v-if="store.todayTodos.length" scroll-y class="schedule-pages">
@@ -76,14 +217,18 @@ function confirmResetData() {
               :key="todo.id"
               :todo="todo"
               @toggle="store.setTodoCompleted"
+              @delete="store.deleteTodo"
             />
           </view>
         </scroll-view>
         <view v-else class="empty-plan">这一天暂时没有待办</view>
 
-        <view class="home-add-plan">
-          <input v-model="todoContent" placeholder="添加一条待办" @confirm="submitTodo" />
-          <button class="secondary" @click="submitTodo">添加</button>
+        <view class="home-todo-create">
+          <view class="home-add-plan">
+            <input v-model="todoContent" placeholder="添加一条待办" @confirm="submitTodo" />
+            <button class="secondary" @click="submitTodo">添加</button>
+          </view>
+          <TodoTimePicker v-model:has-time="todoHasTime" v-model:time="todoTime" />
         </view>
 
         <WeekStrip
@@ -118,16 +263,84 @@ function confirmResetData() {
           <button class="primary tomato-action" @click="goFocus">设置</button>
         </view>
       </section>
-    </view>
-  </MiniProgramShell>
+
+      <view v-if="store.activeDate === weekStartDate" class="review-row">
+        <input v-model="review" placeholder="写一条今日复盘" @confirm="submitReview" />
+        <button class="secondary" @tap.stop="submitReview">归档</button>
+      </view>
+
+      <view v-if="showGuide" class="guide-overlay">
+        <view class="guide-panel">
+          <text class="guide-title">欢迎来到拾光</text>
+          <text>随时记录零碎想法，待办会回到今天。</text>
+          <text>用今日锚点抓住主线，用专注页接住分心。</text>
+          <button class="primary guide-close" @tap.stop="closeGuide">开始使用</button>
+        </view>
+      </view>
+
+      <view v-if="showDataPanel" class="data-overlay" @tap="closeDataPanel">
+        <view class="data-panel" @tap.stop>
+          <view class="data-panel-head">
+            <view>
+              <text class="data-title">数据管理</text>
+              <text class="data-subtitle">导出备份后可在正式版中导入恢复。</text>
+            </view>
+            <button class="close-action" @tap="closeDataPanel">关闭</button>
+          </view>
+
+          <view class="data-block">
+            <view class="data-row-head">
+              <text class="data-label">当前备份</text>
+              <view class="data-actions">
+                <button class="mini-action" @tap="refreshBackupText">刷新</button>
+                <button class="mini-action primary-mini" @tap="copyBackupText">复制</button>
+              </view>
+            </view>
+            <textarea
+              class="backup-box"
+              :value="backupText"
+              disabled
+              maxlength="-1"
+              placeholder="备份内容会显示在这里"
+            />
+          </view>
+
+          <view class="data-block">
+            <view class="data-row-head">
+              <text class="data-label">导入备份</text>
+              <button class="mini-action" @tap="pasteImportText">从剪贴板粘贴</button>
+            </view>
+            <textarea
+              v-model="importText"
+              class="import-box"
+              maxlength="-1"
+              placeholder="把拾光 JSON 备份粘贴到这里"
+            />
+          </view>
+
+          <view class="data-panel-actions">
+            <button class="danger-action" @tap="confirmResetData">清空数据</button>
+            <button class="import-action" @tap="confirmImportData">合并导入</button>
+          </view>
+        </view>
+      </view>
+      </view>
+    </MiniProgramShell>
+  </view>
 </template>
 
 <style scoped lang="scss">
+.page-root {
+  height: 100vh;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
 .home-view {
   display: grid;
   height: 100%;
   min-height: 0;
-  grid-template-rows: minmax(0, 1fr) 168px;
+  grid-template-rows: minmax(0, 1fr) 150px auto;
   gap: 10px;
   overflow: hidden;
   padding: 12px;
@@ -145,7 +358,7 @@ function confirmResetData() {
   display: grid;
   height: 100%;
   min-height: 0;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
   gap: 8px;
   overflow: hidden;
   padding: 12px;
@@ -180,7 +393,7 @@ function confirmResetData() {
   line-height: 1.1;
 }
 
-.reset-action {
+.data-action {
   width: 48px;
   height: 28px;
   min-height: 28px;
@@ -193,6 +406,146 @@ function confirmResetData() {
   font-size: 11px;
   font-weight: 750;
   line-height: 28px;
+}
+
+.guide-action {
+  width: 48px;
+  height: 28px;
+  min-height: 28px;
+  border: 1px solid rgba(74, 144, 217, 0.3);
+  border-radius: 8px;
+  margin: 0;
+  padding: 0;
+  background: #eaf4ff;
+  color: #2f72b4;
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 28px;
+}
+
+.data-overlay {
+  position: fixed;
+  z-index: 20;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: grid;
+  align-items: end;
+  padding: 12px;
+  background: rgba(32, 39, 51, 0.36);
+}
+
+.data-panel {
+  display: grid;
+  max-height: 84vh;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 12px;
+  border: 1px solid #dce4ec;
+  border-radius: 8px;
+  padding: 14px;
+  background: #ffffff;
+  box-shadow: 0 18px 48px rgba(32, 39, 51, 0.2);
+}
+
+.data-panel-head,
+.data-row-head,
+.data-panel-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.data-title {
+  display: block;
+  color: #202733;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.data-subtitle {
+  display: block;
+  margin-top: 4px;
+  color: #6f7b8a;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.data-block {
+  display: grid;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 7px;
+}
+
+.data-label {
+  color: #202733;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.data-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.backup-box,
+.import-box {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-height: 112px;
+  border: 1px solid #dde7ef;
+  border-radius: 8px;
+  padding: 9px;
+  background: #f8fbfe;
+  color: #202733;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.import-box {
+  background: #ffffff;
+}
+
+.close-action,
+.mini-action,
+.danger-action,
+.import-action {
+  min-height: 30px;
+  border: 0;
+  border-radius: 8px;
+  margin: 0;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 30px;
+}
+
+.close-action,
+.mini-action {
+  background: #eaf4ff;
+  color: #2f72b4;
+}
+
+.primary-mini,
+.import-action {
+  background: #4a90d9;
+  color: #ffffff;
+}
+
+.danger-action {
+  background: rgba(138, 89, 96, 0.1);
+  color: #8a5960;
+}
+
+.import-action,
+.danger-action {
+  flex: 1;
 }
 
 .schedule-pages {
@@ -218,6 +571,75 @@ function confirmResetData() {
   color: #6f7b8a;
   font-size: 13px;
   text-align: center;
+}
+
+.home-todo-create {
+  display: grid;
+  gap: 7px;
+}
+
+.anchor-zone {
+  display: grid;
+  gap: 7px;
+}
+
+.anchor-add,
+.review-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
+}
+
+.anchor-add input,
+.review-row input {
+  min-width: 0;
+  height: 34px;
+  border: 1px solid #dde7ef;
+  border-radius: 8px;
+  padding: 0 10px;
+  background: #fbfdff;
+  color: #202733;
+  font-size: 13px;
+}
+
+.review-row {
+  border: 1px solid #dce4ec;
+  border-radius: 8px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.93);
+}
+
+.guide-overlay {
+  position: fixed;
+  z-index: 30;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(32, 39, 51, 0.38);
+}
+
+.guide-panel {
+  display: grid;
+  gap: 12px;
+  border-radius: 8px;
+  padding: 20px;
+  background: #ffffff;
+  color: #6f7b8a;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.guide-title {
+  color: #202733;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.guide-close {
+  height: 38px;
+  min-height: 38px;
+  line-height: 38px;
 }
 
 .home-add-plan {
@@ -359,5 +781,48 @@ function confirmResetData() {
   margin: 0;
   padding: 0;
   line-height: 34px;
+}
+
+@media (max-width: 360px) {
+  .home-view {
+    grid-template-rows: minmax(0, 1fr) 140px;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .schedule-card,
+  .quick-card {
+    padding: 10px;
+  }
+
+  .page-title {
+    font-size: 24px;
+  }
+
+  .quick-row {
+    gap: 8px;
+  }
+
+  .quick-title {
+    font-size: 14px;
+  }
+
+  .quick-copy {
+    display: none;
+  }
+
+  .ring {
+    width: 42px;
+    height: 42px;
+  }
+
+  .ring::after {
+    width: 28px;
+    height: 28px;
+  }
+
+  .timer {
+    font-size: 21px;
+  }
 }
 </style>

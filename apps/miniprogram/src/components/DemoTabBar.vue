@@ -6,7 +6,6 @@ const props = defineProps<{
 const tabs = [
   { key: 'home', label: '首页', url: '/pages/home/index', icon: 'plus' },
   { key: 'scraps', label: '零碎', url: '/pages/scraps/index', icon: 'stack' },
-  { key: 'schedule', label: '日程', url: '/pages/schedule/index', icon: 'calendar' },
   { key: 'focus', label: '专注', url: '/pages/focus/index', icon: 'timer' }
 ] as const;
 
@@ -31,7 +30,7 @@ function go(url: string, key: typeof props.active) {
         <text />
         <text />
       </view>
-      <text>{{ tab.label }}</text>
+      <text class="tab-label">{{ tab.label }}</text>
     </button>
   </view>
 </template>
@@ -39,17 +38,21 @@ function go(url: string, key: typeof props.active) {
 <style scoped lang="scss">
 .bottom-tabs {
   display: grid;
-  min-height: 76px;
-  grid-template-columns: repeat(4, 1fr);
+  min-height: calc(70px + env(safe-area-inset-bottom));
+  grid-template-columns: repeat(3, 1fr);
   border-top: 1px solid rgba(220, 228, 236, 0.94);
-  padding: 7px 8px 12px;
+  padding: 6px 8px calc(8px + env(safe-area-inset-bottom));
   background: rgba(255, 255, 255, 0.9);
 }
 
 .tab {
   display: grid;
+  width: 100%;
   min-width: 0;
+  height: 54px;
   min-height: 54px;
+  grid-template-rows: 26px 14px;
+  align-content: center;
   place-items: center;
   gap: 3px;
   border: 0;
@@ -68,9 +71,19 @@ function go(url: string, key: typeof props.active) {
 
 .tab-icon {
   position: relative;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   color: currentColor;
+}
+
+.tab-label {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  line-height: 14px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tab-icon::before,

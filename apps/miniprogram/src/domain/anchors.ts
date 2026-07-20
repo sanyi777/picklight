@@ -1,4 +1,4 @@
-import { nowISODateTime } from './date';
+import { addDays, nowISODateTime } from './date';
 import type { DailyAnchor, ID, ISODate, ISODateTime } from './types';
 
 export const MAX_DAILY_ANCHORS = 2;
@@ -88,4 +88,25 @@ export function getAnchorsForDate(anchors: DailyAnchor[], date: ISODate): DailyA
 
 export function getCurrentAnchor(anchors: DailyAnchor[]): DailyAnchor | undefined {
   return anchors.find((anchor) => anchor.isCurrent);
+}
+
+export function rollDailyAnchors(anchors: DailyAnchor[], fromDate: ISODate, now = nowISODateTime()): DailyAnchor[] {
+  const nextDate = addDays(fromDate, 1);
+
+  return anchors.flatMap((anchor) => {
+    if (anchor.date !== fromDate) {
+      return anchor;
+    }
+
+    if (anchor.progress >= 100) {
+      return [];
+    }
+
+    return {
+      ...anchor,
+      date: nextDate,
+      isCurrent: false,
+      updatedAt: now
+    };
+  });
 }

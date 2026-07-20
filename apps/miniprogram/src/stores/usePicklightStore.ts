@@ -7,11 +7,23 @@ import {
   getAnchorsForDate,
   getCurrentAnchor,
   setCurrentAnchor,
+  rollDailyAnchors,
   updateAnchorProgress,
   updateAnchorTitle
 } from '@/domain/anchors';
+import { mergePicklightStates, normalizeImportedState, parsePicklightBackup, serializePicklightBackup } from '@/domain/backup';
 import { addDays, nowISODateTime, todayISODate } from '@/domain/date';
-import { addDistractionToFocusSession, completeFocusSession, createFocusSession, startFocusSession } from '@/domain/focus';
+import {
+  addDistractionToFocusSession,
+  completeFocusSession,
+  abandonFocusSession,
+  clearFocusSessionsBeforeDate,
+  createFocusSession,
+  extendFocusSession,
+  pauseFocusSession,
+  startFocusSession,
+  updateFocusSessionTask
+} from '@/domain/focus';
 import { createScrap, deleteScrap as removeScrapById, getScrapsByCategory, updateScrap as updateScrapById } from '@/domain/scraps';
 import { createTodo, getTodoStats, getTodosForDate, rollUnfinishedTodos, toggleTodo } from '@/domain/todos';
 import type { DailyAnchor, FocusSession, ID, ISODate, PicklightState, Scrap, ScrapCategory, Todo } from '@/domain/types';
@@ -32,28 +44,35 @@ function createInitialState(): PicklightState {
 }
 
 function rollOverdueTodosToToday(savedState: PicklightState, today: ISODate): PicklightState {
-  const overdueDates = savedState.todos
-    .filter((todo) => !todo.completed && todo.date < today)
-    .map((todo) => todo.date)
-    .sort();
+  const dates = [
+    savedState.activeDate,
+    ...savedState.todos.map((todo) => todo.date),
+    ...savedState.anchors.map((anchor) => anchor.date),
+    ...savedState.focusSessions.map((session) => session.date)
+  ].filter((date) => date < today).sort();
 
-  if (!overdueDates.length && savedState.activeDate >= today) {
-    return savedState;
+  if (!dates.length) {
+    return { ...savedState, activeDate: today };
   }
 
-  let todos = savedState.todos;
-  let cursor = overdueDates[0] ?? savedState.activeDate;
+  let nextState = savedState;
+  let cursor = dates[0];
 
   while (cursor < today) {
-    todos = rollUnfinishedTodos(todos, cursor);
+    const completedTodoIds = new Set(
+      nextState.todos.filter((todo) => todo.date === cursor && todo.completed).map((todo) => todo.id)
+    );
+    nextState = {
+      ...nextState,
+      todos: rollUnfinishedTodos(nextState.todos, cursor),
+      scraps: nextState.scraps.filter((scrap) => !completedTodoIds.has(scrap.linkedTodoId ?? '')),
+      anchors: rollDailyAnchors(nextState.anchors, cursor),
+      focusSessions: clearFocusSessionsBeforeDate(nextState.focusSessions, addDays(cursor, 1))
+    };
     cursor = addDays(cursor, 1);
   }
 
-  return {
-    ...savedState,
-    todos,
-    activeDate: savedState.activeDate < today ? today : savedState.activeDate
-  };
+  return { ...nextState, activeDate: today };
 }
 
 export const usePicklightStore = defineStore('picklight', () => {
@@ -87,7 +106,24 @@ export const usePicklightStore = defineStore('picklight', () => {
     localStore.clear();
   }
 
+  function exportBackupText(): string {
+    return serializePicklightBackup(state.value);
+  }
+
+  function importBackupText(raw: string) {
+    const backup = parsePicklightBackup(raw);
+    state.value = rollOverdueTodosToToday(
+      mergePicklightStates(state.value, normalizeImportedState(backup.state)),
+      todayISODate()
+    );
+    persist();
+  }
+
   function setActiveDate(date: ISODate) {
+    const today = todayISODate();
+    if (date < today || date > addDays(today, 6)) {
+      return;
+    }
     state.value.activeDate = date;
     persist();
   }
@@ -108,18 +144,32 @@ export const usePicklightStore = defineStore('picklight', () => {
 
   function setTodoCompleted(id: ID, completed: boolean) {
     state.value.todos = toggleTodo(state.value.todos, id, completed);
+    state.value.scraps = state.value.scraps.map((scrap) =>
+      scrap.linkedTodoId === id ? { ...scrap, todoCompleted: completed, updatedAt: nowISODateTime() } : scrap
+    );
+    persist();
+  }
+
+  function deleteTodo(id: ID) {
+    state.value.todos = state.value.todos.filter((todo) => todo.id !== id);
+    state.value.scraps = state.value.scraps.filter((scrap) => scrap.linkedTodoId !== id);
     persist();
   }
 
   function rollDateForward(date = state.value.activeDate) {
+    const completedTodoIds = new Set(state.value.todos.filter((todo) => todo.date === date && todo.completed).map((todo) => todo.id));
     state.value.todos = rollUnfinishedTodos(state.value.todos, date);
+    state.value.scraps = state.value.scraps.filter((scrap) => !completedTodoIds.has(scrap.linkedTodoId ?? ''));
+    state.value.anchors = rollDailyAnchors(state.value.anchors, date);
+    state.value.focusSessions = clearFocusSessionsBeforeDate(state.value.focusSessions, addDays(date, 1));
     persist();
   }
 
-  function addScrap(category: ScrapCategory, content: string): { scrap: Scrap; todo?: Todo } {
+  function addScrap(category: ScrapCategory, content: string, time = ''): { scrap: Scrap; todo?: Todo } {
     const result = createScrap({
       id: createId('scrap'),
       todoId: category === '待办' ? createId('todo') : undefined,
+      todoTime: category === '待办' ? time : '',
       today: state.value.activeDate,
       category,
       content
@@ -138,7 +188,15 @@ export const usePicklightStore = defineStore('picklight', () => {
     return addScrap('复盘', content).scrap;
   }
 
-  function updateScrap(id: ID, category: ScrapCategory, content: string): Scrap | undefined {
+  function getLinkedTodoTime(scrap: Scrap): string {
+    if (!scrap.linkedTodoId) {
+      return '';
+    }
+
+    return state.value.todos.find((todo) => todo.id === scrap.linkedTodoId)?.time ?? '';
+  }
+
+  function updateScrap(id: ID, category: ScrapCategory, content: string, time = ''): Scrap | undefined {
     const trimmedContent = content.trim();
     const previous = state.value.scraps.find((scrap) => scrap.id === id);
     if (!previous || !trimmedContent) {
@@ -162,6 +220,7 @@ export const usePicklightStore = defineStore('picklight', () => {
           ? {
               ...todo,
               content: trimmedContent,
+              time,
               updatedAt: timestamp
             }
           : todo
@@ -173,6 +232,7 @@ export const usePicklightStore = defineStore('picklight', () => {
           id: linkedTodoId,
           date: state.value.activeDate,
           content: trimmedContent,
+          time,
           sourceScrapId: id,
           now: timestamp
         })
@@ -233,7 +293,7 @@ export const usePicklightStore = defineStore('picklight', () => {
     persist();
   }
 
-  function createFocus(task: string, durationMinutes: number, anchorId = currentAnchor.value?.id): FocusSession {
+  function createFocus(task: string, durationMinutes: number, anchorId?: ID): FocusSession {
     const session = createFocusSession({
       id: createId('focus'),
       date: state.value.activeDate,
@@ -253,8 +313,28 @@ export const usePicklightStore = defineStore('picklight', () => {
     persist();
   }
 
+  function pauseFocus(id: ID) {
+    state.value.focusSessions = pauseFocusSession(state.value.focusSessions, id);
+    persist();
+  }
+
+  function extendFocus(id: ID, minutes: number) {
+    state.value.focusSessions = extendFocusSession(state.value.focusSessions, id, minutes);
+    persist();
+  }
+
   function completeFocus(id: ID) {
     state.value.focusSessions = completeFocusSession(state.value.focusSessions, id);
+    persist();
+  }
+
+  function abandonFocus(id: ID) {
+    state.value.focusSessions = abandonFocusSession(state.value.focusSessions, id);
+    persist();
+  }
+
+  function updateFocusTask(id: ID, task: string) {
+    state.value.focusSessions = updateFocusSessionTask(state.value.focusSessions, id, task);
     persist();
   }
 
@@ -280,12 +360,16 @@ export const usePicklightStore = defineStore('picklight', () => {
     hydrate,
     persist,
     resetAllData,
+    exportBackupText,
+    importBackupText,
     setActiveDate,
     addTodo,
     setTodoCompleted,
+    deleteTodo,
     rollDateForward,
     addScrap,
     archiveReview,
+    getLinkedTodoTime,
     updateScrap,
     deleteScrap,
     addAnchor,
@@ -295,7 +379,11 @@ export const usePicklightStore = defineStore('picklight', () => {
     deleteAnchor,
     createFocus,
     startFocus,
+    pauseFocus,
+    extendFocus,
     completeFocus,
+    abandonFocus,
+    updateFocusTask,
     deleteFocus,
     addFocusDistraction
   };
