@@ -19,6 +19,8 @@ const todoTime = ref('09:00');
 const anchorTitle = ref('');
 const review = ref('');
 const showGuide = ref(false);
+const guideStep = ref(0);
+const guideHighlight = ref<'capture' | 'todo' | null>(null);
 const showDataPanel = ref(false);
 const backupText = ref('');
 const importText = ref('');
@@ -33,15 +35,50 @@ const scheduleTitle = computed(() => {
   return `${date.getMonth() + 1}月${date.getDate()}日待办`;
 });
 const canAddAnchor = computed(() => store.todayAnchors.length < 2);
+const guideCopy = computed(() => [
+  { title: '先记录一件零碎', description: '点击下方“快速捕捉”，随便记下一条现在占着你脑子的事。', action: '去记录' },
+  { title: '再放进今天的待办', description: '在今日待办下新增一项，让它留在你接下来会看见的位置。', action: '去添加' },
+  { title: '开始一轮专注', description: '去专注页写下这轮要做的小事；分心时也可以随手记下。', action: '去专注' }
+][guideStep.value]);
 
 onMounted(() => {
   store.hydrate();
   showGuide.value = !uni.getStorageSync('picklight-onboarding-v2');
 });
 
+function openGuide() {
+  guideStep.value = 0;
+  guideHighlight.value = null;
+  showGuide.value = true;
+}
+
 function closeGuide() {
   showGuide.value = false;
+  guideHighlight.value = null;
   uni.setStorageSync('picklight-onboarding-v2', 'seen');
+}
+
+function continueGuide() {
+  showGuide.value = false;
+  if (guideStep.value === 0) {
+    guideHighlight.value = 'capture';
+    return;
+  }
+  if (guideStep.value === 1) {
+    guideHighlight.value = 'todo';
+    return;
+  }
+  closeGuide();
+  goFocus();
+}
+
+function submitQuickScrap(category: Parameters<typeof store.addScrap>[0], content: string, time = '') {
+  store.addScrap(category, content, time);
+  if (guideHighlight.value === 'capture') {
+    guideHighlight.value = null;
+    guideStep.value = 1;
+    showGuide.value = true;
+  }
 }
 
 function submitAnchor() {
@@ -73,6 +110,11 @@ function submitTodo() {
   todoContent.value = '';
   todoHasTime.value = false;
   todoTime.value = '09:00';
+  if (guideHighlight.value === 'todo') {
+    guideHighlight.value = null;
+    guideStep.value = 2;
+    showGuide.value = true;
+  }
 }
 
 function openDataPanel() {
@@ -191,8 +233,10 @@ function confirmResetData() {
             <text class="date">{{ store.activeDate }} · 本地存储</text>
             <text class="page-title">{{ scheduleTitle }}</text>
           </view>
-          <button class="data-action" @tap.stop="openDataPanel">数据</button>
-          <button class="guide-action" @tap.stop="showGuide = true">指引</button>
+          <view class="head-actions">
+            <button class="guide-action" @tap.stop="openGuide">指引</button>
+            <button class="data-action" @tap.stop="openDataPanel">数据</button>
+          </view>
         </view>
 
         <view v-if="store.activeDate === weekStartDate" class="anchor-zone">
@@ -223,7 +267,7 @@ function confirmResetData() {
         </scroll-view>
         <view v-else class="empty-plan">这一天暂时没有待办</view>
 
-        <view class="home-todo-create">
+        <view :class="['home-todo-create', { 'guide-target': guideHighlight === 'todo' }]">
           <view class="home-add-plan">
             <input v-model="todoContent" placeholder="添加一条待办" @confirm="submitTodo" />
             <button class="secondary" @click="submitTodo">添加</button>
@@ -240,14 +284,14 @@ function confirmResetData() {
       </section>
 
       <section class="quick-row">
-        <view class="card quick-card quick-capture-card">
+        <view :class="['card', 'quick-card', 'quick-capture-card', { 'guide-target': guideHighlight === 'capture' }]">
           <text class="quick-title">快速捕捉</text>
           <text class="quick-copy">先把想法放下，默认进入零碎池。</text>
           <ScrapComposer
             class="quick-composer"
             variant="compact"
             placeholder="记录一个念头"
-            @submit="store.addScrap"
+            @submit="submitQuickScrap"
           />
         </view>
 
@@ -271,10 +315,13 @@ function confirmResetData() {
 
       <view v-if="showGuide" class="guide-overlay">
         <view class="guide-panel">
-          <text class="guide-title">欢迎来到拾光</text>
-          <text>随时记录零碎想法，待办会回到今天。</text>
-          <text>用今日锚点抓住主线，用专注页接住分心。</text>
-          <button class="primary guide-close" @tap.stop="closeGuide">开始使用</button>
+          <text class="guide-step">第 {{ guideStep + 1 }} / 3 步</text>
+          <text class="guide-title">{{ guideCopy.title }}</text>
+          <text>{{ guideCopy.description }}</text>
+          <view class="guide-actions">
+            <button class="guide-skip" @tap.stop="closeGuide">暂时跳过</button>
+            <button class="primary guide-close" @tap.stop="continueGuide">{{ guideCopy.action }}</button>
+          </view>
         </view>
       </view>
 
@@ -459,6 +506,12 @@ function confirmResetData() {
   gap: 10px;
 }
 
+.head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .data-title {
   display: block;
   color: #202733;
@@ -630,6 +683,12 @@ function confirmResetData() {
   line-height: 1.5;
 }
 
+.guide-step {
+  color: #2f72b4;
+  font-size: 12px;
+  font-weight: 750;
+}
+
 .guide-title {
   color: #202733;
   font-size: 20px;
@@ -637,9 +696,33 @@ function confirmResetData() {
 }
 
 .guide-close {
+  flex: 1;
   height: 38px;
   min-height: 38px;
   line-height: 38px;
+}
+
+.guide-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.guide-skip {
+  height: 38px;
+  min-height: 38px;
+  border: 1px solid #dce4ec;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #6f7b8a;
+  font-size: 13px;
+  line-height: 38px;
+}
+
+.guide-target {
+  position: relative;
+  z-index: 2;
+  outline: 2px solid #4a90d9;
+  outline-offset: 2px;
 }
 
 .home-add-plan {

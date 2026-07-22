@@ -65,7 +65,6 @@ function confirmDelete() {
       </view>
       <view class="anchor-actions">
         <button class="ghost-action" @tap.stop="startEdit">修改</button>
-        <button class="danger-action" @tap.stop="confirmDelete">删除</button>
       </view>
     </view>
 
@@ -76,6 +75,7 @@ function confirmDelete() {
       <view class="anchor-actions">
         <button class="save-action" @tap.stop="saveEdit">保存</button>
         <button class="ghost-action" @tap.stop="editing = false">取消</button>
+        <button class="danger-action" @tap.stop="confirmDelete">删除</button>
       </view>
     </view>
   </view>
