@@ -2,24 +2,37 @@
 import { computed, onMounted, ref } from 'vue';
 import AnchorCard from '@/components/AnchorCard.vue';
 import CoverScreenMode from '@/components/CoverScreenMode.vue';
+import FocusHistoryModal from '@/components/FocusHistoryModal.vue';
 import MiniProgramShell from '@/components/MiniProgramShell.vue';
 import PomodoroPanel from '@/components/PomodoroPanel.vue';
 import ScrapItem from '@/components/ScrapItem.vue';
 import { useViewportProfile } from '@/composables/useViewportProfile';
 import { todayISODate } from '@/domain/date';
+import { getActualFocusSeconds } from '@/domain/focus';
 import { usePicklightStore } from '@/stores/usePicklightStore';
 
 const store = usePicklightStore();
 const { isCoverScreen } = useViewportProfile();
 const anchorTitle = ref('');
 const distraction = ref('');
+const showFocusHistory = ref(false);
 const focusSessionsForDate = computed(() =>
   store.state.focusSessions.filter((session) => session.date === store.activeDate)
 );
+const focusHistorySessions = computed(() => focusSessionsForDate.value.filter((session) => session.completed));
 const latestSession = computed(() => [...focusSessionsForDate.value].reverse().find((session) => !session.completed));
 const distractions = computed(() => store.allScraps.filter((scrap) => scrap.category === '分心' && scrap.date === store.activeDate));
 const canAddAnchor = computed(() => store.todayAnchors.length < 2);
 const hasTwoAnchors = computed(() => store.todayAnchors.length >= 2);
+const completedFocusSeconds = computed(() =>
+  focusHistorySessions.value
+    .reduce((total, session) => total + getActualFocusSeconds(session), 0)
+);
+const completedFocusLabel = computed(() => {
+  const minutes = Math.floor(completedFocusSeconds.value / 60);
+  const hours = Math.floor(minutes / 60);
+  return hours ? `${hours} 小时 ${minutes % 60} 分钟` : `${minutes} 分钟`;
+});
 
 function submitAnchor() {
   if (!anchorTitle.value.trim()) {
@@ -83,21 +96,31 @@ onMounted(() => {
         </view>
       </section>
 
+      <section class="card focus-history-card">
+        <text class="history-card-value">今日已专注 {{ completedFocusLabel }}</text>
+        <button class="history-open-action" @tap.stop="showFocusHistory = true">专注历史</button>
+      </section>
+
       <section class="card pomodoro-card">
         <PomodoroPanel
           :compact="hasTwoAnchors"
           :latest-session="latestSession"
-          :sessions="focusSessionsForDate"
           @create="store.createFocus"
           @start="store.startFocus"
           @pause="store.pauseFocus"
           @extend="store.extendFocus"
           @complete="store.completeFocus"
           @abandon="store.abandonFocus"
-          @update="store.updateFocusTask"
-          @delete="store.deleteFocus"
         />
       </section>
+
+      <FocusHistoryModal
+        v-if="showFocusHistory"
+        :sessions="focusHistorySessions"
+        @close="showFocusHistory = false"
+        @update="store.updateFocusTask"
+        @delete="store.deleteFocus"
+      />
 
       <section class="card distraction-card">
         <view class="section-head">
@@ -136,7 +159,7 @@ onMounted(() => {
   display: grid;
   height: 100%;
   min-height: 0;
-  grid-template-rows: auto auto minmax(132px, auto);
+  grid-template-rows: auto auto auto minmax(132px, auto);
   align-content: start;
   gap: 10px;
   overflow-y: auto;
@@ -144,7 +167,7 @@ onMounted(() => {
 }
 
 .focus-view.two-anchors {
-  grid-template-rows: auto auto minmax(132px, auto);
+  grid-template-rows: auto auto auto minmax(132px, auto);
 }
 
 .card {
@@ -228,9 +251,45 @@ input {
 
 .pomodoro-card {
   display: grid;
+  width: 100%;
   min-height: 0;
   overflow: visible;
   padding: 12px;
+}
+
+.pomodoro-card :deep(.pomodoro) {
+  height: 100%;
+}
+
+.focus-history-card {
+  display: flex;
+  min-height: 72px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.history-card-value {
+  display: block;
+  color: #202733;
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.history-open-action {
+  height: 32px;
+  min-height: 32px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 8px;
+  margin: 0;
+  padding: 0 10px;
+  background: #eaf4ff;
+  color: #2f72b4;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 32px;
 }
 
 .two-anchors .pomodoro-card {
@@ -281,13 +340,13 @@ input {
 
 @media (max-width: 360px) {
   .focus-view {
-    grid-template-rows: auto auto minmax(128px, auto);
+    grid-template-rows: auto auto auto minmax(128px, auto);
     gap: 8px;
     padding: 10px;
   }
 
   .focus-view.two-anchors {
-    grid-template-rows: auto auto minmax(128px, auto);
+    grid-template-rows: auto auto auto minmax(128px, auto);
   }
 
   .focus-anchor-card,
@@ -322,12 +381,12 @@ input {
 @media (max-height: 760px) {
   .focus-view {
     height: 100%;
-    grid-template-rows: auto auto minmax(128px, auto);
+    grid-template-rows: auto auto auto minmax(128px, auto);
     overflow-y: auto;
   }
 
   .focus-view.two-anchors {
-    grid-template-rows: auto auto minmax(128px, auto);
+    grid-template-rows: auto auto auto minmax(128px, auto);
   }
 
   .focus-anchor-card {

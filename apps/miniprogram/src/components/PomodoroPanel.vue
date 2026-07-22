@@ -6,11 +6,9 @@ import type { FocusSession } from '@/domain/types';
 const props = withDefaults(
   defineProps<{
     latestSession?: FocusSession;
-    sessions?: FocusSession[];
     compact?: boolean;
   }>(),
   {
-    sessions: () => [],
     compact: false
   }
 );
@@ -22,8 +20,6 @@ const emit = defineEmits<{
   extend: [id: string, minutes: number];
   complete: [id: string];
   abandon: [id: string];
-  update: [id: string, task: string];
-  delete: [id: string];
 }>();
 
 const task = ref('');
@@ -40,9 +36,6 @@ const timing = computed(() =>
 );
 const remainingSeconds = computed(() => timing.value?.remainingSeconds ?? durationMinutes.value * 60);
 const elapsed = computed(() => Boolean(timing.value?.elapsed && props.latestSession?.startedAt && !props.latestSession.completed));
-const historySessions = computed(() => [...props.sessions].sort((a, b) => (b.completedAt ?? b.createdAt).localeCompare(a.completedAt ?? a.createdAt)));
-const editingHistoryId = ref<string>();
-const historyTask = ref('');
 const formattedTime = computed(() => {
   const minutes = Math.floor(remainingSeconds.value / 60);
   const seconds = remainingSeconds.value % 60;
@@ -70,10 +63,14 @@ const stateLabel = computed(() => {
 });
 
 watch(
-  () => props.latestSession?.id,
-  () => {
+  () => [props.latestSession?.id, props.latestSession?.status] as const,
+  ([, status]) => {
     nowTick.value = Date.now();
-    startDisplayTicker();
+    if (status === 'running') {
+      startDisplayTicker();
+    } else {
+      stopTimer();
+    }
   },
   { immediate: true }
 );
@@ -142,8 +139,9 @@ function pauseTimer() {
     return;
   }
 
-  emit('pause', sessionId);
+  stopTimer();
   nowTick.value = Date.now();
+  emit('pause', sessionId);
 }
 
 function stopTimer() {
@@ -170,17 +168,6 @@ function abandonSession() {
   emit('abandon', sessionId);
 }
 
-function startHistoryEdit(id: string, taskValue: string) {
-  editingHistoryId.value = id;
-  historyTask.value = taskValue;
-}
-
-function saveHistoryEdit() {
-  if (!editingHistoryId.value || !historyTask.value.trim()) return;
-  emit('update', editingHistoryId.value, historyTask.value);
-  editingHistoryId.value = undefined;
-}
-
 function extendSession() {
   const sessionId = props.latestSession?.id;
   if (!sessionId) {
@@ -191,19 +178,6 @@ function extendSession() {
   nowTick.value = Date.now();
 }
 
-function deleteSession(id: string) {
-  uni.showModal({
-    title: '删除番茄钟',
-    content: '这条历史记录会被删除。',
-    confirmText: '删除',
-    confirmColor: '#8a5960',
-    success: (result) => {
-      if (result.confirm) {
-        emit('delete', id);
-      }
-    }
-  });
-}
 </script>
 
 <template>
@@ -226,38 +200,6 @@ function deleteSession(id: string) {
         <button class="primary-button" @tap.stop="createSession">创建番茄钟</button>
       </view>
 
-      <view class="history-panel">
-        <view class="history-head">
-          <text class="history-title">历史番茄钟</text>
-          <text class="history-count">{{ sessions.length }} 轮</text>
-        </view>
-        <scroll-view
-          v-if="historySessions.length"
-          scroll-y
-          class="history-list"
-          :style="compact ? 'height: 64px; max-height: 64px;' : 'height: 84px; max-height: 84px;'"
-        >
-          <view class="history-scroll-inner">
-            <view
-              v-for="session in historySessions"
-              :key="session.id"
-              :class="['history-item', { completed: session.completed }]"
-            >
-              <view class="history-copy">
-                <input v-if="editingHistoryId === session.id" v-model="historyTask" class="history-edit" @confirm="saveHistoryEdit" />
-                <text v-else class="history-task">{{ session.task }}</text>
-                <text class="history-meta">{{ Math.round((session.actualSeconds ?? session.durationMinutes * 60) / 60) }} 分钟</text>
-              </view>
-              <view class="history-actions">
-                <button v-if="editingHistoryId === session.id" class="history-delete" @tap.stop="saveHistoryEdit">保存</button>
-                <button v-else class="history-delete" @tap.stop="startHistoryEdit(session.id, session.task)">修改</button>
-                <button class="history-delete" @tap.stop="deleteSession(session.id)">删除</button>
-              </view>
-            </view>
-          </view>
-        </scroll-view>
-        <view v-else class="empty-history">还没有番茄钟记录</view>
-      </view>
     </view>
 
     <view v-else class="run-panel">
@@ -292,11 +234,15 @@ function deleteSession(id: string) {
 <style scoped lang="scss">
 .pomodoro {
   display: grid;
+  width: 100%;
+  height: 100%;
   min-height: 0;
 }
 
 .idle-panel {
   display: grid;
+  width: 100%;
+  height: 100%;
   min-height: 0;
   grid-template-rows: auto auto;
   align-content: start;
@@ -305,6 +251,7 @@ function deleteSession(id: string) {
 
 .create-panel {
   display: grid;
+  width: 100%;
   gap: 8px;
 }
 
@@ -388,96 +335,6 @@ input {
   font-weight: 750;
 }
 
-.history-panel {
-  display: grid;
-  min-height: 0;
-  grid-template-rows: auto auto;
-  gap: 6px;
-  border-top: 1px solid #e5edf4;
-  padding-top: 8px;
-  overflow: hidden;
-}
-
-.history-head {
-  display: flex;
-  min-width: 0;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.history-title {
-  color: #202733;
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.history-count,
-.history-meta {
-  color: #6f7b8a;
-  font-size: 12px;
-}
-
-.history-list {
-  display: block;
-  width: 100%;
-  height: 76px;
-  min-height: 0;
-}
-
-.history-scroll-inner {
-  padding-right: 2px;
-}
-
-.history-item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  border-bottom: 1px solid #e5edf4;
-  padding: 6px 0;
-}
-
-.history-item.completed .history-task {
-  color: #08796f;
-}
-
-.history-copy {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-}
-
-.history-task {
-  overflow: hidden;
-  color: #202733;
-  font-size: 13px;
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.history-delete {
-  width: 44px;
-  height: 26px;
-  min-height: 26px;
-  border: 1px solid rgba(138, 89, 96, 0.24);
-  border-radius: 8px;
-  padding: 0;
-  background: rgba(138, 89, 96, 0.08);
-  color: #8a5960;
-  font-size: 11px;
-  line-height: 26px;
-}
-
-.empty-history {
-  display: grid;
-  place-items: center;
-  border: 1px dashed #ccd9e5;
-  border-radius: 8px;
-  color: #6f7b8a;
-  font-size: 12px;
-}
-
 .run-panel {
   display: grid;
   min-height: 206px;
@@ -485,16 +342,6 @@ input {
   gap: 9px;
 }
 
-.history-actions {
-  display: flex;
-  gap: 3px;
-}
-
-.history-edit {
-  height: 28px;
-  min-height: 28px;
-  padding: 0 6px;
-}
 
 .dial-shell {
   display: grid;
@@ -617,10 +464,6 @@ input {
 .compact .idle-panel,
 .compact .run-panel {
   gap: 6px;
-}
-
-.compact .history-list {
-  height: 56px;
 }
 
 .compact .run-panel {
