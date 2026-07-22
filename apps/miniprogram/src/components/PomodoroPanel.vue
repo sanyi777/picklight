@@ -2,6 +2,7 @@
 import { computed, onUnmounted, ref, watch } from 'vue';
 import { getFocusTiming } from '@/domain/focus';
 import type { FocusSession } from '@/domain/types';
+import { usePicklightStore } from '@/stores/usePicklightStore';
 
 const props = withDefaults(
   defineProps<{
@@ -13,14 +14,7 @@ const props = withDefaults(
   }
 );
 
-const emit = defineEmits<{
-  create: [task: string, durationMinutes: number];
-  start: [id: string];
-  pause: [id: string];
-  extend: [id: string, minutes: number];
-  settle: [id: string, outcome: 'completed' | 'abandoned'];
-}>();
-
+const store = usePicklightStore();
 const task = ref('');
 const durationMinutes = ref(25);
 const durationInput = ref('25');
@@ -109,7 +103,7 @@ function createSession() {
     return;
   }
 
-  emit('create', trimmed, durationMinutes.value);
+  store.createFocus(trimmed, durationMinutes.value);
   task.value = '';
 }
 
@@ -118,7 +112,7 @@ function startOrResume() {
     return;
   }
 
-  emit('start', props.latestSession.id);
+  store.startFocus(props.latestSession.id);
   startDisplayTicker();
 }
 
@@ -140,7 +134,7 @@ function pauseTimer() {
 
   stopTimer();
   nowTick.value = Date.now();
-  emit('pause', sessionId);
+  store.pauseFocus(sessionId);
 }
 
 function stopTimer() {
@@ -157,14 +151,14 @@ function completeSession() {
   }
 
   stopTimer();
-  emit('settle', sessionId, 'completed');
+  store.completeFocus(sessionId);
 }
 
 function abandonSession() {
   const sessionId = props.latestSession?.id;
   if (!sessionId) return;
   stopTimer();
-  emit('settle', sessionId, 'abandoned');
+  store.abandonFocus(sessionId);
 }
 
 function extendSession() {
@@ -173,7 +167,7 @@ function extendSession() {
     return;
   }
 
-  emit('extend', sessionId, 5);
+  store.extendFocus(sessionId, 5);
   nowTick.value = Date.now();
 }
 

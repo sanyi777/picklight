@@ -1,7 +1,9 @@
 import { mount } from '@vue/test-utils';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import PomodoroPanel from '../PomodoroPanel.vue';
 import type { FocusSession } from '@/domain/types';
+import { usePicklightStore } from '@/stores/usePicklightStore';
 
 function runningSession(): FocusSession {
   return {
@@ -20,6 +22,15 @@ function runningSession(): FocusSession {
 }
 
 describe('PomodoroPanel', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.stubGlobal('uni', {
+      getStorageSync: vi.fn(),
+      setStorageSync: vi.fn(),
+      removeStorageSync: vi.fn()
+    });
+  });
+
   afterEach(() => {
     vi.useRealTimers();
   });
@@ -43,18 +54,46 @@ describe('PomodoroPanel', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('settles the visible running session with the selected outcome', async () => {
+  it('completes the visible running session in the store', async () => {
     vi.useFakeTimers();
-    const wrapper = mount(PomodoroPanel, { props: { latestSession: runningSession() } });
+    const store = usePicklightStore();
+    store.state.focusSessions = [runningSession()];
+    const wrapper = mount(PomodoroPanel, { props: { latestSession: store.state.focusSessions[0] } });
 
     await wrapper.get('.complete-action').trigger('tap');
+
+    expect(store.state.focusSessions[0].completed).toBe(true);
+    expect(wrapper.get('.complete-action').attributes('data-eventsync')).toBe('true');
+  });
+
+  it('pauses the visible running session in the store', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-22T00:05:00.000Z'));
+    const store = usePicklightStore();
+    store.state.focusSessions = [runningSession()];
+    const wrapper = mount(PomodoroPanel, { props: { latestSession: store.state.focusSessions[0] } });
+
+    await wrapper.get('.secondary-action').trigger('tap');
+
+    expect(store.state.focusSessions[0]).toMatchObject({
+      status: 'paused',
+      pausedAt: '2026-07-22T00:05:00.000Z'
+    });
+  });
+
+  it('abandons the visible running session in the store', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-22T00:05:00.000Z'));
+    const store = usePicklightStore();
+    store.state.focusSessions = [runningSession()];
+    const wrapper = mount(PomodoroPanel, { props: { latestSession: store.state.focusSessions[0] } });
+
     await wrapper.get('.abandon-action').trigger('tap');
 
-    expect(wrapper.emitted('settle')).toEqual([
-      ['focus-1', 'completed'],
-      ['focus-1', 'abandoned']
-    ]);
-    expect(wrapper.get('.complete-action').attributes('data-eventsync')).toBe('true');
-    expect(wrapper.get('.abandon-action').attributes('data-eventsync')).toBe('true');
+    expect(store.state.focusSessions[0]).toMatchObject({
+      status: 'completed',
+      completed: true,
+      actualSeconds: 300
+    });
   });
 });

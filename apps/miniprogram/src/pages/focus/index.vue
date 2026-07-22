@@ -59,15 +59,6 @@ function recordDistraction() {
   distraction.value = '';
 }
 
-function settleFocus(sessionId: string, outcome: 'completed' | 'abandoned') {
-  if (outcome === 'completed') {
-    store.completeFocus(sessionId);
-    return;
-  }
-
-  store.abandonFocus(sessionId);
-}
-
 onMounted(() => {
   store.hydrate();
   store.setActiveDate(todayISODate());
@@ -114,11 +105,6 @@ onMounted(() => {
         <PomodoroPanel
           :compact="hasTwoAnchors"
           :latest-session="latestSession"
-          @create="store.createFocus"
-          @start="store.startFocus"
-          @pause="store.pauseFocus"
-          @extend="store.extendFocus"
-          @settle="settleFocus"
         />
       </section>
 
