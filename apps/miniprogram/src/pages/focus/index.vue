@@ -640,7 +640,7 @@ input {
   z-index: 40;
   inset: 0;
   display: grid;
-  align-items: end;
+  place-items: center;
   padding: 12px;
   background: rgba(32, 39, 51, 0.38);
 }
@@ -648,6 +648,7 @@ input {
 .history-modal {
   display: grid;
   width: 100%;
+  max-width: 420px;
   max-height: 68vh;
   min-height: 236px;
   grid-template-rows: auto minmax(0, 1fr);
