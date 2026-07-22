@@ -1,21 +1,28 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { onHide, onShow } from '@dcloudio/uni-app';
 import AnchorCard from '@/components/AnchorCard.vue';
 import CoverScreenMode from '@/components/CoverScreenMode.vue';
-import FocusHistoryModal from '@/components/FocusHistoryModal.vue';
 import MiniProgramShell from '@/components/MiniProgramShell.vue';
-import PomodoroPanel from '@/components/PomodoroPanel.vue';
 import ScrapItem from '@/components/ScrapItem.vue';
 import { useViewportProfile } from '@/composables/useViewportProfile';
 import { todayISODate } from '@/domain/date';
-import { getActualFocusSeconds } from '@/domain/focus';
+import { getActualFocusSeconds, getFocusTiming } from '@/domain/focus';
+import type { FocusSession } from '@/domain/types';
 import { usePicklightStore } from '@/stores/usePicklightStore';
 
 const store = usePicklightStore();
 const { isCoverScreen } = useViewportProfile();
 const anchorTitle = ref('');
 const distraction = ref('');
-const showFocusHistory = ref(false);
+const focusTask = ref('');
+const focusDuration = ref(25);
+const focusDurationInput = ref('25');
+const nowTick = ref(Date.now());
+const historyExpanded = ref(false);
+const editingHistoryId = ref<string>();
+const historyTaskValue = ref('');
+let displayTimer: ReturnType<typeof setInterval> | undefined;
 const focusSessionsForDate = computed(() =>
   store.state.focusSessions.filter((session) => session.date === store.activeDate)
 );
@@ -33,6 +40,32 @@ const completedFocusLabel = computed(() => {
   const hours = Math.floor(minutes / 60);
   return hours ? `${hours} 小时 ${minutes % 60} 分钟` : `${minutes} 分钟`;
 });
+const focusTiming = computed(() =>
+  latestSession.value ? getFocusTiming(latestSession.value, new Date(nowTick.value).toISOString()) : undefined
+);
+const focusRunning = computed(() => latestSession.value?.status === 'running');
+const focusStarted = computed(() => Boolean(latestSession.value?.startedAt));
+const focusElapsed = computed(() => Boolean(focusTiming.value?.elapsed && focusStarted.value));
+const remainingSeconds = computed(() => focusTiming.value?.remainingSeconds ?? focusDuration.value * 60);
+const formattedFocusTime = computed(() => {
+  const minutes = Math.floor(remainingSeconds.value / 60);
+  const seconds = remainingSeconds.value % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+});
+const focusProgress = computed(() => {
+  const totalSeconds = focusTiming.value?.totalSeconds ?? Math.max(1, focusDuration.value * 60);
+  const elapsedSeconds = focusTiming.value?.elapsedSeconds ?? totalSeconds - remainingSeconds.value;
+  return Math.max(0, Math.min(100, Math.round((elapsedSeconds / totalSeconds) * 100)));
+});
+const focusStateLabel = computed(() => {
+  if (focusElapsed.value) return '已到点';
+  if (focusRunning.value) return '专注中';
+  if (latestSession.value?.status === 'paused') return '已暂停';
+  return focusStarted.value ? '已暂停' : '待开始';
+});
+const focusDialStyle = computed(() => ({
+  background: `conic-gradient(from -90deg, #4a90d9 0 ${focusProgress.value}%, #e5edf4 ${focusProgress.value}% 100%)`
+}));
 
 function submitAnchor() {
   if (!anchorTitle.value.trim()) {
@@ -59,10 +92,125 @@ function recordDistraction() {
   distraction.value = '';
 }
 
+function clampFocusDuration(value: number) {
+  return Math.max(1, Math.min(180, Math.round(value)));
+}
+
+function setFocusDuration(value: number) {
+  focusDuration.value = clampFocusDuration(value);
+  focusDurationInput.value = String(focusDuration.value);
+}
+
+function updateFocusDuration(event: Event) {
+  const value =
+    'detail' in event && typeof event.detail === 'object' && event.detail && 'value' in event.detail
+      ? String(event.detail.value)
+      : (event.target as HTMLInputElement | null)?.value ?? '';
+  focusDurationInput.value = value;
+  const parsed = Number(value);
+  if (Number.isFinite(parsed) && parsed > 0) setFocusDuration(parsed);
+}
+
+function createFocus() {
+  const trimmedTask = focusTask.value.trim();
+  if (!trimmedTask) return;
+  store.createFocus(trimmedTask, focusDuration.value);
+  focusTask.value = '';
+}
+
+function startFocus() {
+  if (!latestSession.value) return;
+  store.startFocus(latestSession.value.id);
+  refreshFocusClock();
+}
+
+function pauseFocus() {
+  if (!latestSession.value) return;
+  store.pauseFocus(latestSession.value.id);
+  refreshFocusClock();
+}
+
+function completeFocus() {
+  if (!latestSession.value) return;
+  store.completeFocus(latestSession.value.id);
+  stopDisplayTimer();
+}
+
+function abandonFocus() {
+  if (!latestSession.value) return;
+  store.abandonFocus(latestSession.value.id);
+  stopDisplayTimer();
+}
+
+function extendFocus() {
+  if (!latestSession.value) return;
+  store.extendFocus(latestSession.value.id, 5);
+  refreshFocusClock();
+}
+
+function refreshFocusClock() {
+  nowTick.value = Date.now();
+  if (latestSession.value?.status === 'running') startDisplayTimer();
+}
+
+function startDisplayTimer() {
+  if (displayTimer) return;
+  displayTimer = setInterval(() => {
+    nowTick.value = Date.now();
+  }, 1000);
+}
+
+function stopDisplayTimer() {
+  if (!displayTimer) return;
+  clearInterval(displayTimer);
+  displayTimer = undefined;
+}
+
+function formatHistoryMinutes(session: FocusSession) {
+  return `${Math.floor(getActualFocusSeconds(session) / 60)} 分钟`;
+}
+
+function startEditingHistory(session: FocusSession) {
+  editingHistoryId.value = session.id;
+  historyTaskValue.value = session.task;
+}
+
+function saveHistory() {
+  if (!editingHistoryId.value || !historyTaskValue.value.trim()) return;
+  store.updateFocusTask(editingHistoryId.value, historyTaskValue.value);
+  editingHistoryId.value = undefined;
+}
+
+function deleteHistory(id: string) {
+  uni.showModal({
+    title: '删除番茄钟',
+    content: '这条专注记录会被删除。',
+    confirmText: '删除',
+    confirmColor: '#8a5960',
+    success: (result) => {
+      if (result.confirm) store.deleteFocus(id);
+    }
+  });
+}
+
+watch(
+  () => [latestSession.value?.id, latestSession.value?.status] as const,
+  ([, status]) => {
+    nowTick.value = Date.now();
+    if (status === 'running') startDisplayTimer();
+    else stopDisplayTimer();
+  },
+  { immediate: true }
+);
+
 onMounted(() => {
   store.hydrate();
   store.setActiveDate(todayISODate());
 });
+
+onShow(refreshFocusClock);
+onHide(stopDisplayTimer);
+onUnmounted(stopDisplayTimer);
 </script>
 
 <template>
@@ -98,23 +246,69 @@ onMounted(() => {
 
       <section class="card focus-history-card">
         <text class="history-card-value">今日已专注 {{ completedFocusLabel }}</text>
-        <button class="history-open-action" data-eventsync="true" @tap.stop="showFocusHistory = true">专注历史</button>
+        <button class="history-open-action" data-eventsync="true" @tap.stop="historyExpanded = !historyExpanded">
+          {{ historyExpanded ? '收起历史' : '专注历史' }}
+        </button>
+        <view v-if="historyExpanded" class="history-inline">
+          <scroll-view v-if="focusHistorySessions.length" scroll-y class="history-inline-list">
+            <view v-for="session in focusHistorySessions" :key="session.id" class="history-item">
+              <view class="history-copy">
+                <input v-if="editingHistoryId === session.id" v-model="historyTaskValue" @confirm="saveHistory" />
+                <text v-else class="history-task">{{ session.task }}</text>
+                <text class="history-meta">{{ formatHistoryMinutes(session) }}</text>
+              </view>
+              <view class="history-actions">
+                <button class="history-action" data-eventsync="true" @tap.stop="editingHistoryId === session.id ? saveHistory() : startEditingHistory(session)">
+                  {{ editingHistoryId === session.id ? '保存' : '修改' }}
+                </button>
+                <button class="history-action danger" data-eventsync="true" @tap.stop="deleteHistory(session.id)">删除</button>
+              </view>
+            </view>
+          </scroll-view>
+          <view v-else class="empty-line">今天还没有专注记录</view>
+        </view>
       </section>
 
       <section class="card pomodoro-card">
-        <PomodoroPanel
-          :compact="hasTwoAnchors"
-          :latest-session="latestSession"
-        />
-      </section>
+        <view v-if="!latestSession" class="focus-setup">
+          <view class="focus-field">
+            <text class="field-label">本轮小事</text>
+            <input v-model="focusTask" placeholder="这一轮只完成什么？" @confirm="createFocus" />
+          </view>
+          <view class="duration-row">
+            <text class="field-label">分钟</text>
+            <input class="duration-input" type="number" :value="focusDurationInput" @input="updateFocusDuration" />
+            <view class="duration-buttons">
+              <button :class="{ active: focusDuration === 15 }" data-eventsync="true" @tap.stop="setFocusDuration(15)">15</button>
+              <button :class="{ active: focusDuration === 25 }" data-eventsync="true" @tap.stop="setFocusDuration(25)">25</button>
+              <button :class="{ active: focusDuration === 45 }" data-eventsync="true" @tap.stop="setFocusDuration(45)">45</button>
+            </view>
+          </view>
+          <button class="create-focus-action" data-eventsync="true" @tap.stop="createFocus">创建番茄钟</button>
+        </view>
 
-      <FocusHistoryModal
-        v-if="showFocusHistory"
-        :sessions="focusHistorySessions"
-        @dismiss="showFocusHistory = false"
-        @update="store.updateFocusTask"
-        @delete="store.deleteFocus"
-      />
+        <view v-else class="focus-running">
+          <view class="focus-dial" :style="focusDialStyle">
+            <view class="focus-dial-inner">
+              <text class="focus-time">{{ formattedFocusTime }}</text>
+              <text class="focus-state">{{ focusStateLabel }}</text>
+            </view>
+          </view>
+          <view class="focus-session-copy">
+            <text class="focus-task">{{ latestSession.task }}</text>
+            <text class="focus-minutes">{{ latestSession.durationMinutes }} 分钟</text>
+          </view>
+          <view class="focus-actions">
+            <button v-if="focusElapsed" class="focus-primary" data-eventsync="true" @tap.stop="extendFocus">再 5 分钟</button>
+            <button v-else-if="!focusRunning" class="focus-primary" data-eventsync="true" @tap.stop="startFocus">
+              {{ focusStarted ? '继续' : '开始' }}
+            </button>
+            <button v-else class="focus-secondary" data-eventsync="true" @tap.stop="pauseFocus">暂停</button>
+            <button class="focus-complete" data-eventsync="true" @tap.stop="completeFocus">完成</button>
+            <button class="focus-abandon" data-eventsync="true" @tap.stop="abandonFocus">放弃</button>
+          </view>
+        </view>
+      </section>
 
       <section class="card distraction-card">
         <view class="section-head">
@@ -251,15 +445,146 @@ input {
   padding: 12px;
 }
 
-.pomodoro-card :deep(.pomodoro) {
-  height: 100%;
+.focus-setup,
+.focus-running {
+  display: grid;
+  width: 100%;
+  gap: 8px;
+}
+
+.focus-field {
+  display: grid;
+  gap: 5px;
+}
+
+.field-label,
+.focus-state,
+.focus-minutes,
+.history-meta {
+  color: #6f7b8a;
+  font-size: 12px;
+}
+
+.duration-row {
+  display: grid;
+  grid-template-columns: auto 58px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.duration-input {
+  padding: 0 8px;
+  text-align: center;
+}
+
+.duration-buttons,
+.focus-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.duration-buttons button,
+.create-focus-action,
+.focus-primary,
+.focus-secondary,
+.focus-complete,
+.focus-abandon {
+  height: 34px;
+  min-height: 34px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 34px;
+}
+
+.duration-buttons button,
+.focus-secondary {
+  border: 1px solid #dce4ec;
+  background: #fbfdff;
+  color: #6f7b8a;
+}
+
+.duration-buttons button.active {
+  border-color: rgba(74, 144, 217, 0.56);
+  background: #eaf4ff;
+  color: #2f72b4;
+  font-weight: 750;
+}
+
+.create-focus-action,
+.focus-primary {
+  background: #4a90d9;
+  color: #ffffff;
+  font-weight: 750;
+}
+
+.focus-running {
+  grid-template-rows: auto auto auto;
+  justify-items: stretch;
+}
+
+.focus-dial {
+  display: grid;
+  width: 154px;
+  height: 154px;
+  place-self: center;
+  place-items: center;
+  border-radius: 50%;
+}
+
+.focus-dial-inner {
+  display: grid;
+  width: 112px;
+  height: 112px;
+  place-items: center;
+  align-content: center;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+.focus-time {
+  color: #202733;
+  font-size: 30px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.focus-session-copy {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.focus-task {
+  min-width: 0;
+  overflow: hidden;
+  color: #202733;
+  font-size: 15px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.focus-complete {
+  border: 1px solid rgba(25, 169, 154, 0.35);
+  background: rgba(25, 169, 154, 0.09);
+  color: #08796f;
+  font-weight: 750;
+}
+
+.focus-abandon {
+  border: 1px solid rgba(138, 89, 96, 0.24);
+  background: rgba(138, 89, 96, 0.08);
+  color: #8a5960;
 }
 
 .focus-history-card {
-  display: flex;
+  display: grid;
   min-height: 72px;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
   padding: 10px 12px;
 }
@@ -286,8 +611,88 @@ input {
   line-height: 32px;
 }
 
+.history-inline {
+  display: grid;
+  max-height: 210px;
+  grid-column: 1 / -1;
+  overflow: hidden;
+  border-top: 1px solid #e5edf4;
+  padding-top: 6px;
+}
+
+.history-inline-list {
+  max-height: 190px;
+}
+
+.history-item,
+.history-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.history-item {
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid #e5edf4;
+  padding: 8px 0;
+}
+
+.history-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.history-task {
+  overflow: hidden;
+  color: #202733;
+  font-size: 14px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-actions {
+  flex: 0 0 auto;
+  gap: 5px;
+}
+
+.history-action {
+  height: 30px;
+  min-height: 30px;
+  border: 0;
+  border-radius: 8px;
+  margin: 0;
+  padding: 0 10px;
+  background: #eaf4ff;
+  color: #2f72b4;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 30px;
+}
+
+.history-action.danger {
+  background: rgba(138, 89, 96, 0.1);
+  color: #8a5960;
+}
+
 .two-anchors .pomodoro-card {
   padding: 8px;
+}
+
+.two-anchors .focus-dial {
+  width: 112px;
+  height: 112px;
+}
+
+.two-anchors .focus-dial-inner {
+  width: 82px;
+  height: 82px;
+}
+
+.two-anchors .focus-time {
+  font-size: 23px;
 }
 
 .distraction-card {
@@ -351,6 +756,30 @@ input {
   .pomodoro-card,
   .two-anchors .pomodoro-card {
     padding: 8px;
+  }
+
+  .duration-row {
+    grid-template-columns: auto 48px minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .duration-buttons,
+  .focus-actions {
+    gap: 5px;
+  }
+
+  .focus-dial {
+    width: 126px;
+    height: 126px;
+  }
+
+  .focus-dial-inner {
+    width: 94px;
+    height: 94px;
+  }
+
+  .focus-time {
+    font-size: 25px;
   }
 
   .page-title {
