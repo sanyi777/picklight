@@ -18,8 +18,7 @@ const emit = defineEmits<{
   start: [id: string];
   pause: [id: string];
   extend: [id: string, minutes: number];
-  complete: [id: string];
-  abandon: [id: string];
+  settle: [id: string, outcome: 'completed' | 'abandoned'];
 }>();
 
 const task = ref('');
@@ -158,14 +157,14 @@ function completeSession() {
   }
 
   stopTimer();
-  emit('complete', sessionId);
+  emit('settle', sessionId, 'completed');
 }
 
 function abandonSession() {
   const sessionId = props.latestSession?.id;
   if (!sessionId) return;
   stopTimer();
-  emit('abandon', sessionId);
+  emit('settle', sessionId, 'abandoned');
 }
 
 function extendSession() {
@@ -197,7 +196,7 @@ function extendSession() {
             <button :class="{ active: durationMinutes === 45 }" @tap.stop="setDuration(45)">45</button>
           </view>
         </view>
-        <button class="primary-button" @tap.stop="createSession">创建番茄钟</button>
+        <button class="primary-button" data-eventsync="true" @tap.stop="createSession">创建番茄钟</button>
       </view>
 
     </view>
@@ -221,11 +220,11 @@ function extendSession() {
       </view>
 
       <view class="actions">
-        <button v-if="elapsed" class="primary-action" @tap.stop="extendSession">再 5 分钟</button>
-        <button v-else-if="!running" class="primary-action" @tap.stop="startOrResume">{{ started ? '继续' : '开始' }}</button>
-        <button v-else class="secondary-action" @tap.stop="pauseTimer">暂停</button>
-        <button class="complete-action" @tap.stop="completeSession">完成</button>
-        <button class="abandon-action" @tap.stop="abandonSession">放弃</button>
+        <button v-if="elapsed" class="primary-action" data-eventsync="true" @tap.stop="extendSession">再 5 分钟</button>
+        <button v-else-if="!running" class="primary-action" data-eventsync="true" @tap.stop="startOrResume">{{ started ? '继续' : '开始' }}</button>
+        <button v-else class="secondary-action" data-eventsync="true" @tap.stop="pauseTimer">暂停</button>
+        <button class="complete-action" data-eventsync="true" @tap.stop="completeSession">完成</button>
+        <button class="abandon-action" data-eventsync="true" @tap.stop="abandonSession">放弃</button>
       </view>
     </view>
   </view>

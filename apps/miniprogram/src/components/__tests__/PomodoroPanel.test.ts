@@ -43,14 +43,18 @@ describe('PomodoroPanel', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('emits complete and abandon for the visible running session', async () => {
+  it('settles the visible running session with the selected outcome', async () => {
     vi.useFakeTimers();
     const wrapper = mount(PomodoroPanel, { props: { latestSession: runningSession() } });
 
     await wrapper.get('.complete-action').trigger('tap');
     await wrapper.get('.abandon-action').trigger('tap');
 
-    expect(wrapper.emitted('complete')).toEqual([['focus-1']]);
-    expect(wrapper.emitted('abandon')).toEqual([['focus-1']]);
+    expect(wrapper.emitted('settle')).toEqual([
+      ['focus-1', 'completed'],
+      ['focus-1', 'abandoned']
+    ]);
+    expect(wrapper.get('.complete-action').attributes('data-eventsync')).toBe('true');
+    expect(wrapper.get('.abandon-action').attributes('data-eventsync')).toBe('true');
   });
 });

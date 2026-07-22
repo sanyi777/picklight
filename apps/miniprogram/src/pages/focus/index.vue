@@ -59,6 +59,15 @@ function recordDistraction() {
   distraction.value = '';
 }
 
+function settleFocus(sessionId: string, outcome: 'completed' | 'abandoned') {
+  if (outcome === 'completed') {
+    store.completeFocus(sessionId);
+    return;
+  }
+
+  store.abandonFocus(sessionId);
+}
+
 onMounted(() => {
   store.hydrate();
   store.setActiveDate(todayISODate());
@@ -98,7 +107,7 @@ onMounted(() => {
 
       <section class="card focus-history-card">
         <text class="history-card-value">今日已专注 {{ completedFocusLabel }}</text>
-        <button class="history-open-action" @tap.stop="showFocusHistory = true">专注历史</button>
+        <button class="history-open-action" data-eventsync="true" @tap.stop="showFocusHistory = true">专注历史</button>
       </section>
 
       <section class="card pomodoro-card">
@@ -109,15 +118,14 @@ onMounted(() => {
           @start="store.startFocus"
           @pause="store.pauseFocus"
           @extend="store.extendFocus"
-          @complete="store.completeFocus"
-          @abandon="store.abandonFocus"
+          @settle="settleFocus"
         />
       </section>
 
       <FocusHistoryModal
         v-if="showFocusHistory"
         :sessions="focusHistorySessions"
-        @close="showFocusHistory = false"
+        @dismiss="showFocusHistory = false"
         @update="store.updateFocusTask"
         @delete="store.deleteFocus"
       />

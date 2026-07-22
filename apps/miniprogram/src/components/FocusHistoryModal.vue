@@ -8,7 +8,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  close: [];
+  dismiss: [];
   update: [id: string, task: string];
   delete: [id: string];
 }>();
@@ -48,14 +48,14 @@ function confirmDelete(id: string) {
 </script>
 
 <template>
-  <view class="history-overlay" @tap="emit('close')">
+  <view class="history-overlay" data-eventsync="true" @tap="emit('dismiss')">
     <view class="history-modal" @tap.stop>
       <view class="history-head">
         <view>
           <text class="history-title">专注历史</text>
           <text class="history-subtitle">只保留当天的记录</text>
         </view>
-        <button class="close-button" @tap.stop="emit('close')">关闭</button>
+        <button class="close-button" data-eventsync="true" @tap.stop="emit('dismiss')">关闭</button>
       </view>
 
       <scroll-view v-if="orderedSessions.length" scroll-y class="history-list">
