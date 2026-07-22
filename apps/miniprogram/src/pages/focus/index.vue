@@ -19,7 +19,7 @@ const focusTask = ref('');
 const focusDuration = ref(25);
 const focusDurationInput = ref('25');
 const nowTick = ref(Date.now());
-const historyExpanded = ref(false);
+const showFocusHistory = ref(false);
 const editingHistoryId = ref<string>();
 const historyTaskValue = ref('');
 let displayTimer: ReturnType<typeof setInterval> | undefined;
@@ -181,6 +181,16 @@ function saveHistory() {
   editingHistoryId.value = undefined;
 }
 
+function openFocusHistory() {
+  showFocusHistory.value = true;
+}
+
+function closeFocusHistory() {
+  showFocusHistory.value = false;
+  editingHistoryId.value = undefined;
+  historyTaskValue.value = '';
+}
+
 function deleteHistory(id: string) {
   uni.showModal({
     title: '删除番茄钟',
@@ -191,6 +201,11 @@ function deleteHistory(id: string) {
       if (result.confirm) store.deleteFocus(id);
     }
   });
+}
+
+function handlePageHide() {
+  stopDisplayTimer();
+  closeFocusHistory();
 }
 
 watch(
@@ -209,8 +224,8 @@ onMounted(() => {
 });
 
 onShow(refreshFocusClock);
-onHide(stopDisplayTimer);
-onUnmounted(stopDisplayTimer);
+onHide(handlePageHide);
+onUnmounted(handlePageHide);
 </script>
 
 <template>
@@ -246,27 +261,7 @@ onUnmounted(stopDisplayTimer);
 
       <section class="card focus-history-card">
         <text class="history-card-value">今日已专注 {{ completedFocusLabel }}</text>
-        <button class="history-open-action" data-eventsync="true" @tap.stop="historyExpanded = !historyExpanded">
-          {{ historyExpanded ? '收起历史' : '专注历史' }}
-        </button>
-        <view v-if="historyExpanded" class="history-inline">
-          <scroll-view v-if="focusHistorySessions.length" scroll-y class="history-inline-list">
-            <view v-for="session in focusHistorySessions" :key="session.id" class="history-item">
-              <view class="history-copy">
-                <input v-if="editingHistoryId === session.id" v-model="historyTaskValue" @confirm="saveHistory" />
-                <text v-else class="history-task">{{ session.task }}</text>
-                <text class="history-meta">{{ formatHistoryMinutes(session) }}</text>
-              </view>
-              <view class="history-actions">
-                <button class="history-action" data-eventsync="true" @tap.stop="editingHistoryId === session.id ? saveHistory() : startEditingHistory(session)">
-                  {{ editingHistoryId === session.id ? '保存' : '修改' }}
-                </button>
-                <button class="history-action danger" data-eventsync="true" @tap.stop="deleteHistory(session.id)">删除</button>
-              </view>
-            </view>
-          </scroll-view>
-          <view v-else class="empty-line">今天还没有专注记录</view>
-        </view>
+        <button class="history-open-action" data-eventsync="true" @tap.stop="openFocusHistory">专注历史</button>
       </section>
 
       <section class="card pomodoro-card">
@@ -331,6 +326,35 @@ onUnmounted(stopDisplayTimer);
         </scroll-view>
         <view v-else class="empty-line">暂无分心记录</view>
       </section>
+      </view>
+
+      <view v-if="showFocusHistory" class="history-overlay" data-eventsync="true" @tap="closeFocusHistory">
+        <view class="history-modal" @tap.stop>
+          <view class="history-modal-head">
+            <view>
+              <text class="history-modal-title">专注历史</text>
+              <text class="history-modal-subtitle">只保留当天的记录</text>
+            </view>
+            <button class="history-close-action" data-eventsync="true" @tap.stop="closeFocusHistory">关闭</button>
+          </view>
+
+          <scroll-view v-if="focusHistorySessions.length" scroll-y class="history-modal-list">
+            <view v-for="session in focusHistorySessions" :key="session.id" class="history-item">
+              <view class="history-copy">
+                <input v-if="editingHistoryId === session.id" v-model="historyTaskValue" @confirm="saveHistory" />
+                <text v-else class="history-task">{{ session.task }}</text>
+                <text class="history-meta">{{ formatHistoryMinutes(session) }}</text>
+              </view>
+              <view class="history-actions">
+                <button class="history-action" data-eventsync="true" @tap.stop="editingHistoryId === session.id ? saveHistory() : startEditingHistory(session)">
+                  {{ editingHistoryId === session.id ? '保存' : '修改' }}
+                </button>
+                <button class="history-action danger" data-eventsync="true" @tap.stop="deleteHistory(session.id)">删除</button>
+              </view>
+            </view>
+          </scroll-view>
+          <view v-else class="history-empty">今天还没有专注记录</view>
+        </view>
       </view>
     </MiniProgramShell>
   </view>
@@ -611,17 +635,81 @@ input {
   line-height: 32px;
 }
 
-.history-inline {
+.history-overlay {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
   display: grid;
-  max-height: 210px;
-  grid-column: 1 / -1;
-  overflow: hidden;
-  border-top: 1px solid #e5edf4;
-  padding-top: 6px;
+  align-items: end;
+  padding: 12px;
+  background: rgba(32, 39, 51, 0.38);
 }
 
-.history-inline-list {
-  max-height: 190px;
+.history-modal {
+  display: grid;
+  width: 100%;
+  max-height: 68vh;
+  min-height: 236px;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  border: 1px solid #dce4ec;
+  border-radius: 8px;
+  padding: 16px;
+  background: #ffffff;
+  box-shadow: 0 18px 48px rgba(32, 39, 51, 0.2);
+}
+
+.history-modal-head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.history-modal-title,
+.history-modal-subtitle {
+  display: block;
+}
+
+.history-modal-title {
+  color: #202733;
+  font-size: 19px;
+  font-weight: 800;
+}
+
+.history-modal-subtitle {
+  margin-top: 4px;
+  color: #6f7b8a;
+  font-size: 12px;
+}
+
+.history-modal-list {
+  height: 100%;
+  min-height: 0;
+}
+
+.history-close-action {
+  height: 32px;
+  min-height: 32px;
+  border: 0;
+  border-radius: 8px;
+  margin: 0;
+  padding: 0 11px;
+  background: #eaf4ff;
+  color: #2f72b4;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 32px;
+}
+
+.history-empty {
+  display: grid;
+  place-items: center;
+  border: 1px dashed #ccd9e5;
+  border-radius: 8px;
+  color: #6f7b8a;
+  font-size: 13px;
 }
 
 .history-item,

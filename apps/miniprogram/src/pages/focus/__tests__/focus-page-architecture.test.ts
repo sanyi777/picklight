@@ -12,6 +12,8 @@ describe('focus page architecture', () => {
     expect(source).toContain('@tap.stop="pauseFocus"');
     expect(source).toContain('@tap.stop="completeFocus"');
     expect(source).toContain('@tap.stop="abandonFocus"');
+    expect(source).toContain('v-if="showFocusHistory"');
+    expect(source).toContain('onHide(handlePageHide)');
     expect(source.match(/data-eventsync="true"/g)?.length).toBeGreaterThanOrEqual(8);
   });
 });
