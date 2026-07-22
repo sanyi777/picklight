@@ -17,7 +17,6 @@ const todoContent = ref('');
 const todoHasTime = ref(false);
 const todoTime = ref('09:00');
 const anchorTitle = ref('');
-const review = ref('');
 const showGuide = ref(false);
 const guideStep = ref(0);
 const guideHighlight = ref<'capture' | 'todo' | null>(null);
@@ -89,12 +88,6 @@ function submitAnchor() {
   } catch (error) {
     uni.showToast({ title: error instanceof Error ? error.message : '无法添加锚点', icon: 'none' });
   }
-}
-
-function submitReview() {
-  if (!review.value.trim()) return;
-  store.archiveReview(review.value);
-  review.value = '';
 }
 
 function goFocus() {
@@ -261,7 +254,6 @@ function confirmResetData() {
               :key="todo.id"
               :todo="todo"
               @toggle="store.setTodoCompleted"
-              @delete="store.deleteTodo"
             />
           </view>
         </scroll-view>
@@ -307,11 +299,6 @@ function confirmResetData() {
           <button class="primary tomato-action" @click="goFocus">设置</button>
         </view>
       </section>
-
-      <view v-if="store.activeDate === weekStartDate" class="review-row">
-        <input v-model="review" placeholder="写一条今日复盘" @confirm="submitReview" />
-        <button class="secondary" @tap.stop="submitReview">归档</button>
-      </view>
 
       <view v-if="showGuide" class="guide-overlay">
         <view class="guide-panel">
@@ -387,7 +374,7 @@ function confirmResetData() {
   display: grid;
   height: 100%;
   min-height: 0;
-  grid-template-rows: minmax(0, 1fr) 150px auto;
+  grid-template-rows: minmax(0, 1fr) 150px;
   gap: 10px;
   overflow: hidden;
   padding: 12px;
@@ -636,15 +623,13 @@ function confirmResetData() {
   gap: 7px;
 }
 
-.anchor-add,
-.review-row {
+.anchor-add {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 7px;
 }
 
-.anchor-add input,
-.review-row input {
+.anchor-add input {
   min-width: 0;
   height: 34px;
   border: 1px solid #dde7ef;
@@ -653,13 +638,6 @@ function confirmResetData() {
   background: #fbfdff;
   color: #202733;
   font-size: 13px;
-}
-
-.review-row {
-  border: 1px solid #dce4ec;
-  border-radius: 8px;
-  padding: 8px;
-  background: rgba(255, 255, 255, 0.93);
 }
 
 .guide-overlay {

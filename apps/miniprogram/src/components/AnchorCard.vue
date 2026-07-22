@@ -30,6 +30,10 @@ function saveEdit() {
   editing.value = false;
 }
 
+function cancelEdit() {
+  editing.value = false;
+}
+
 function confirmDelete() {
   uni.showModal({
     title: '删除锚点',
@@ -47,7 +51,7 @@ function confirmDelete() {
 
 <template>
   <view class="anchor-card">
-    <view v-if="!editing" class="anchor-layout">
+    <view class="anchor-layout">
       <view class="anchor-content">
         <view class="title-line">
           <text class="anchor-title">{{ anchor.title }}</text>
@@ -68,14 +72,15 @@ function confirmDelete() {
       </view>
     </view>
 
-    <view v-else class="anchor-layout">
-      <view class="anchor-content">
+    <view v-if="editing" class="editor-overlay" @tap="cancelEdit">
+      <view class="editor-panel" @tap.stop>
+        <text class="editor-title">修改锚点</text>
         <textarea v-model="draftTitle" maxlength="80" auto-height placeholder="锚点名称" />
-      </view>
-      <view class="anchor-actions">
-        <button class="save-action" @tap.stop="saveEdit">保存</button>
-        <button class="ghost-action" @tap.stop="editing = false">取消</button>
-        <button class="danger-action" @tap.stop="confirmDelete">删除</button>
+        <view class="editor-actions">
+          <button class="ghost-action" @tap.stop="cancelEdit">取消</button>
+          <button class="save-action" @tap.stop="saveEdit">保存</button>
+        </view>
+        <button class="danger-action delete-anchor" @tap.stop="confirmDelete">删除这个锚点</button>
       </view>
     </view>
   </view>
@@ -147,6 +152,39 @@ textarea {
   line-height: 1.35;
 }
 
+.editor-overlay {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(32, 39, 51, 0.38);
+}
+
+.editor-panel {
+  display: grid;
+  width: 100%;
+  max-width: 320px;
+  gap: 12px;
+  border-radius: 8px;
+  padding: 16px;
+  background: #ffffff;
+  box-shadow: 0 18px 48px rgba(32, 39, 51, 0.2);
+}
+
+.editor-title {
+  color: #202733;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.editor-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
 .anchor-actions {
   display: grid;
   width: 44px;
@@ -180,6 +218,16 @@ textarea {
 .save-action {
   background: #4a90d9;
   color: #ffffff;
+}
+
+.editor-actions .ghost-action,
+.editor-actions .save-action,
+.delete-anchor {
+  width: 100%;
+  height: 34px;
+  min-height: 34px;
+  font-size: 13px;
+  line-height: 34px;
 }
 
 @media (max-width: 360px) {
