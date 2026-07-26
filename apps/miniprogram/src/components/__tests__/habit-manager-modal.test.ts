@@ -20,4 +20,15 @@ describe('habit card architecture', () => {
     expect(modal).toContain('store.deleteHabit');
     expect(app).toContain('onShow(store.hydrate)');
   });
+
+  it('keeps the existing habit list to three visible rows with its own scrolling', () => {
+    const modal = readFileSync(
+      resolve(process.cwd(), 'src/components/HabitManagerModal.vue'),
+      'utf8'
+    );
+
+    expect(modal).toContain('<scroll-view v-if="store.habits.length" scroll-y class="habit-list">');
+    expect(modal).toContain('height: 174px;');
+    expect(modal).toContain('height: 58px;');
+  });
 });

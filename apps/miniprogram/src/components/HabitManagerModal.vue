@@ -92,17 +92,19 @@ function confirmDelete(habit: Habit) {
               <text class="habit-count">{{ store.habits.length }} 条</text>
             </view>
 
-            <view v-if="store.habits.length" class="habit-list">
-              <view v-for="habit in store.habits" :key="habit.id" class="habit-item">
-                <view class="habit-copy">
-                  <text class="habit-content">{{ habit.content }}</text>
-                  <text class="habit-meta">
-                    {{ formatHabitWeekdays(habit.weekdays) }}{{ habit.time ? ` · ${habit.time}` : ' · 无截止时间' }}
-                  </text>
+            <scroll-view v-if="store.habits.length" scroll-y class="habit-list">
+              <view class="habit-list-inner">
+                <view v-for="habit in store.habits" :key="habit.id" class="habit-item">
+                  <view class="habit-copy">
+                    <text class="habit-content">{{ habit.content }}</text>
+                    <text class="habit-meta">
+                      {{ formatHabitWeekdays(habit.weekdays) }}{{ habit.time ? ` · ${habit.time}` : ' · 无截止时间' }}
+                    </text>
+                  </view>
+                  <button class="edit-action" @tap.stop="editingHabit = habit">修改</button>
                 </view>
-                <button class="edit-action" @tap.stop="editingHabit = habit">修改</button>
               </view>
-            </view>
+            </scroll-view>
             <view v-else class="empty-state">还没有习惯待办</view>
           </section>
         </view>
@@ -236,10 +238,19 @@ function confirmDelete(habit: Habit) {
 }
 
 .habit-list {
+  width: 100%;
+  height: 174px;
+  min-height: 174px;
+  max-height: 174px;
+}
+
+.habit-list-inner {
   display: grid;
 }
 
 .habit-item {
+  box-sizing: border-box;
+  height: 58px;
   justify-content: space-between;
   gap: 10px;
   border-bottom: 1px solid #e5edf4;
@@ -253,10 +264,19 @@ function confirmDelete(habit: Habit) {
 }
 
 .habit-content {
+  overflow: hidden;
+  text-overflow: ellipsis;
   overflow-wrap: anywhere;
+  white-space: nowrap;
   color: #202733;
   font-size: 14px;
   font-weight: 750;
+}
+
+.habit-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .empty-state {
