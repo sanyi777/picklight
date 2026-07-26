@@ -30,5 +30,7 @@ describe('habit card architecture', () => {
     expect(modal).toContain('<scroll-view v-if="store.habits.length" scroll-y class="habit-list">');
     expect(modal).toContain('height: 174px;');
     expect(modal).toContain('height: 58px;');
+    expect(modal).toContain('<view v-else class="empty-state">');
+    expect(modal).toContain('.habit-list,\n.empty-state');
   });
 });

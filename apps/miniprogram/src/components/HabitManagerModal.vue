@@ -237,7 +237,8 @@ function confirmDelete(habit: Habit) {
   font-size: 12px;
 }
 
-.habit-list {
+.habit-list,
+.empty-state {
   width: 100%;
   height: 174px;
   min-height: 174px;
@@ -280,8 +281,8 @@ function confirmDelete(habit: Habit) {
 }
 
 .empty-state {
+  box-sizing: border-box;
   display: grid;
-  min-height: 76px;
   place-items: center;
   border: 1px dashed #ccd9e5;
   border-radius: 8px;
