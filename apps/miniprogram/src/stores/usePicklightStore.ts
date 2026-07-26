@@ -24,9 +24,21 @@ import {
   startFocusSession,
   updateFocusSessionTask
 } from '@/domain/focus';
+import { createHabit as createHabitRule, syncHabitTodos } from '@/domain/habits';
 import { createScrap, deleteScrap as removeScrapById, getScrapsByCategory, updateScrap as updateScrapById } from '@/domain/scraps';
 import { createTodo, getTodoStats, getTodosForDate, rollUnfinishedTodos, toggleTodo } from '@/domain/todos';
-import type { DailyAnchor, FocusSession, ID, ISODate, PicklightState, Scrap, ScrapCategory, Todo } from '@/domain/types';
+import type {
+  DailyAnchor,
+  FocusSession,
+  Habit,
+  HabitWeekday,
+  ID,
+  ISODate,
+  PicklightState,
+  Scrap,
+  ScrapCategory,
+  Todo
+} from '@/domain/types';
 import { localStore } from '@/storage/localStore';
 
 function createId(prefix: string): ID {
@@ -39,7 +51,27 @@ function createInitialState(): PicklightState {
     scraps: [],
     anchors: [],
     focusSessions: [],
+    habits: [],
     activeDate: todayISODate()
+  };
+}
+
+function normalizeStoredState(savedState: PicklightState): PicklightState {
+  return {
+    ...savedState,
+    habits: Array.isArray(savedState.habits) ? savedState.habits : []
+  };
+}
+
+function reconcileHabitTodos(savedState: PicklightState, fromDate: ISODate): PicklightState {
+  return {
+    ...savedState,
+    todos: syncHabitTodos({
+      todos: savedState.todos,
+      habits: savedState.habits,
+      fromDate,
+      createId: () => createId('todo')
+    })
   };
 }
 
@@ -84,16 +116,16 @@ export const usePicklightStore = defineStore('picklight', () => {
   const currentAnchor = computed(() => getCurrentAnchor(state.value.anchors));
   const todoStats = computed(() => getTodoStats(state.value.todos, state.value.activeDate));
   const allScraps = computed(() => getScrapsByCategory(state.value.scraps));
+  const habits = computed(() => [...state.value.habits].sort((a, b) => a.createdAt.localeCompare(b.createdAt)));
 
   function hydrate() {
     const savedState = localStore.load();
     if (savedState) {
       const currentToday = todayISODate();
-      const nextState = rollOverdueTodosToToday(savedState, currentToday);
+      const normalized = normalizeStoredState(savedState);
+      const nextState = reconcileHabitTodos(rollOverdueTodosToToday(normalized, currentToday), currentToday);
       state.value = nextState;
-      if (nextState !== savedState) {
-        persist();
-      }
+      persist();
     }
   }
 
@@ -112,9 +144,10 @@ export const usePicklightStore = defineStore('picklight', () => {
 
   function importBackupText(raw: string) {
     const backup = parsePicklightBackup(raw);
-    state.value = rollOverdueTodosToToday(
-      mergePicklightStates(state.value, normalizeImportedState(backup.state)),
-      todayISODate()
+    const today = todayISODate();
+    state.value = reconcileHabitTodos(
+      rollOverdueTodosToToday(mergePicklightStates(state.value, normalizeImportedState(backup.state)), today),
+      today
     );
     persist();
   }
@@ -150,6 +183,40 @@ export const usePicklightStore = defineStore('picklight', () => {
     persist();
   }
 
+  function addHabit(content: string, time: string, weekdays: HabitWeekday[]): Habit {
+    const habit = createHabitRule({
+      id: createId('habit'),
+      content,
+      time,
+      weekdays
+    });
+    state.value.habits = [...state.value.habits, habit];
+    state.value = reconcileHabitTodos(state.value, todayISODate());
+    persist();
+    return habit;
+  }
+
+  function updateHabit(id: ID, content: string, time: string, weekdays: HabitWeekday[]): Habit | undefined {
+    const previous = state.value.habits.find((habit) => habit.id === id);
+    if (!previous) {
+      return undefined;
+    }
+    const updated = {
+      ...createHabitRule({ id, content, time, weekdays }),
+      createdAt: previous.createdAt
+    };
+    state.value.habits = state.value.habits.map((habit) => (habit.id === id ? updated : habit));
+    state.value = reconcileHabitTodos(state.value, todayISODate());
+    persist();
+    return updated;
+  }
+
+  function deleteHabit(id: ID) {
+    state.value.habits = state.value.habits.filter((habit) => habit.id !== id);
+    state.value = reconcileHabitTodos(state.value, todayISODate());
+    persist();
+  }
+
   function deleteTodo(id: ID) {
     state.value.todos = state.value.todos.filter((todo) => todo.id !== id);
     state.value.scraps = state.value.scraps.filter((scrap) => scrap.linkedTodoId !== id);
@@ -162,6 +229,7 @@ export const usePicklightStore = defineStore('picklight', () => {
     state.value.scraps = state.value.scraps.filter((scrap) => !completedTodoIds.has(scrap.linkedTodoId ?? ''));
     state.value.anchors = rollDailyAnchors(state.value.anchors, date);
     state.value.focusSessions = clearFocusSessionsBeforeDate(state.value.focusSessions, addDays(date, 1));
+    state.value = reconcileHabitTodos(state.value, addDays(date, 1));
     persist();
   }
 
@@ -357,12 +425,16 @@ export const usePicklightStore = defineStore('picklight', () => {
     currentAnchor,
     todoStats,
     allScraps,
+    habits,
     hydrate,
     persist,
     resetAllData,
     exportBackupText,
     importBackupText,
     setActiveDate,
+    addHabit,
+    updateHabit,
+    deleteHabit,
     addTodo,
     setTodoCompleted,
     deleteTodo,

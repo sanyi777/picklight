@@ -117,7 +117,7 @@ describe('usePicklightStore', () => {
 
     expect(backup).toMatchObject({
       app: 'picklight',
-      schemaVersion: 2
+      schemaVersion: 3
     });
 
     setActivePinia(createPinia());
@@ -157,5 +157,86 @@ describe('usePicklightStore', () => {
       rolledOverFrom: '2026-07-06',
       completed: false
     });
+  });
+
+  it('creates, updates, and deletes a habit with its seven-day todos', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 27, 9));
+    const store = usePicklightStore();
+
+    const habit = store.addHabit('锻炼', '19:00', [1, 3, 5]);
+
+    expect(store.state.habits).toHaveLength(1);
+    expect(store.state.todos.map((todo) => todo.date)).toEqual(['2026-07-27', '2026-07-29', '2026-07-31']);
+
+    store.updateHabit(habit.id, '读书', '', [2, 4]);
+
+    expect(store.state.todos.map((todo) => [todo.date, todo.content, todo.time])).toEqual([
+      ['2026-07-28', '读书', ''],
+      ['2026-07-30', '读书', '']
+    ]);
+
+    store.deleteHabit(habit.id);
+
+    expect(store.state.habits).toEqual([]);
+    expect(store.state.todos).toEqual([]);
+  });
+
+  it('hydrates v0.1 local state without losing data', () => {
+    uni.setStorageSync('picklight-state-v2', {
+      todos: [],
+      scraps: [],
+      anchors: [],
+      focusSessions: [],
+      activeDate: '2026-07-27'
+    });
+    const store = usePicklightStore();
+
+    store.hydrate();
+
+    expect(store.state.habits).toEqual([]);
+    expect(store.state.activeDate).toBeTruthy();
+  });
+
+  it('drops yesterday habit todos and refills the seven-day window during hydrate', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 27, 9));
+    const firstStore = usePicklightStore();
+    firstStore.addHabit('背单词', '', [1, 2, 3, 4, 5, 6, 7]);
+
+    vi.setSystemTime(new Date(2026, 6, 28, 9));
+    setActivePinia(createPinia());
+    const nextStore = usePicklightStore();
+    nextStore.hydrate();
+
+    expect(nextStore.state.todos).toHaveLength(7);
+    expect(nextStore.state.todos.map((todo) => todo.date)).toEqual([
+      '2026-07-28',
+      '2026-07-29',
+      '2026-07-30',
+      '2026-07-31',
+      '2026-08-01',
+      '2026-08-02',
+      '2026-08-03'
+    ]);
+  });
+
+  it('imports a habit backup and reconciles its seven-day todos', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 27, 9));
+    const sourceStore = usePicklightStore();
+    sourceStore.addHabit('喝水', '', [1, 2, 3, 4, 5, 6, 7]);
+    const parsedBackup = JSON.parse(sourceStore.exportBackupText());
+    parsedBackup.state.todos = [];
+
+    setActivePinia(createPinia());
+    const targetStore = usePicklightStore();
+    targetStore.importBackupText(JSON.stringify(parsedBackup));
+
+    expect(targetStore.state.habits).toHaveLength(1);
+    expect(targetStore.state.todos).toHaveLength(7);
+    expect(new Set(targetStore.state.todos.map((todo) => todo.sourceHabitId))).toEqual(
+      new Set([targetStore.state.habits[0].id])
+    );
   });
 });

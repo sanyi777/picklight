@@ -17,6 +17,12 @@
       "style": {
         "navigationBarTitleText": "专注"
       }
+    },
+    {
+      "path": "pages/habits/index",
+      "style": {
+        "navigationBarTitleText": "习惯待办"
+      }
     }
   ],
   "globalStyle": {

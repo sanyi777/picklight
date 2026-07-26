@@ -52,6 +52,10 @@ function openGuide() {
   showGuide.value = true;
 }
 
+function openHabits() {
+  uni.navigateTo({ url: '/pages/habits/index' });
+}
+
 function closeGuide() {
   showGuide.value = false;
   guideHighlight.value = null;
@@ -207,7 +211,7 @@ function confirmImportData() {
 function confirmResetData() {
   uni.showModal({
     title: '清空数据',
-    content: '会清空待办、零碎、锚点和番茄钟历史，确认继续吗？',
+    content: '会清空待办、零碎、锚点、习惯和番茄钟历史，确认继续吗？',
     confirmText: '清空',
     confirmColor: '#8a5960',
     success: (result) => {
@@ -237,6 +241,7 @@ function confirmResetData() {
             <text class="page-title">{{ scheduleTitle }}</text>
           </view>
           <view class="head-actions">
+            <button class="habit-action" @tap.stop="openHabits">习惯</button>
             <button class="guide-action" @tap.stop="openGuide">指引</button>
             <button class="data-action" @tap.stop="openDataPanel">数据</button>
           </view>
@@ -449,34 +454,36 @@ function confirmResetData() {
   line-height: 1.1;
 }
 
-.data-action {
+.data-action,
+.guide-action,
+.habit-action {
   width: 48px;
   height: 28px;
   min-height: 28px;
-  border: 1px solid rgba(138, 89, 96, 0.24);
   border-radius: 8px;
   margin: 0;
   padding: 0;
-  background: rgba(138, 89, 96, 0.08);
-  color: #8a5960;
   font-size: 11px;
   font-weight: 750;
   line-height: 28px;
 }
 
+.data-action {
+  border: 1px solid rgba(138, 89, 96, 0.24);
+  background: rgba(138, 89, 96, 0.08);
+  color: #8a5960;
+}
+
 .guide-action {
-  width: 48px;
-  height: 28px;
-  min-height: 28px;
   border: 1px solid rgba(74, 144, 217, 0.3);
-  border-radius: 8px;
-  margin: 0;
-  padding: 0;
   background: #eaf4ff;
   color: #2f72b4;
-  font-size: 11px;
-  font-weight: 750;
-  line-height: 28px;
+}
+
+.habit-action {
+  border: 1px solid rgba(25, 169, 154, 0.3);
+  background: rgba(25, 169, 154, 0.09);
+  color: #08796f;
 }
 
 .data-overlay {

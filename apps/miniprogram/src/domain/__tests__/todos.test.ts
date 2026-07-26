@@ -74,4 +74,16 @@ describe('todos', () => {
     expect(rolled.find((todo) => todo.id === 'deadline')).toMatchObject({ date: '2026-07-06', time: '' });
     expect(rolled.find((todo) => todo.id === 'inbox')).toMatchObject({ date: '2026-07-06', time: '' });
   });
+
+  it('removes unfinished habit todos instead of rolling them forward', () => {
+    const habitTodo = createTodo({
+      id: 'habit-todo',
+      date: '2026-07-27',
+      content: '背单词',
+      sourceHabitId: 'habit-1',
+      now: '2026-07-27T08:00:00.000Z'
+    });
+
+    expect(rollUnfinishedTodos([habitTodo], '2026-07-27', '2026-07-28T00:00:00.000Z')).toEqual([]);
+  });
 });

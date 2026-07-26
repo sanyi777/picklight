@@ -7,6 +7,7 @@ export interface CreateTodoInput {
   content: string;
   time?: string;
   sourceScrapId?: ID;
+  sourceHabitId?: ID;
   now?: ISODateTime;
 }
 
@@ -20,6 +21,7 @@ export function createTodo(input: CreateTodoInput): Todo {
     content: input.content.trim(),
     completed: false,
     sourceScrapId: input.sourceScrapId,
+    sourceHabitId: input.sourceHabitId,
     createdAt: timestamp,
     updatedAt: timestamp
   };
@@ -53,6 +55,10 @@ export function rollUnfinishedTodos(todos: Todo[], fromDate: ISODate, now = nowI
     }
 
     if (todo.completed) {
+      return [];
+    }
+
+    if (todo.sourceHabitId) {
       return [];
     }
 

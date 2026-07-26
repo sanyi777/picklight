@@ -1,4 +1,10 @@
 <script setup lang="ts">
+import { onShow } from '@dcloudio/uni-app';
+import { usePicklightStore } from '@/stores/usePicklightStore';
+
+const store = usePicklightStore();
+
+onShow(store.hydrate);
 </script>
 
 <template>

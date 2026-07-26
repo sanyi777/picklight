@@ -2,8 +2,8 @@
   "name": "拾光",
   "appid": "__UNI__PICKLIGHT",
   "description": "本地优先的私人注意力助理",
-  "versionName": "0.1.0",
-  "versionCode": "100",
+  "versionName": "0.2.0",
+  "versionCode": "200",
   "mp-weixin": {
     "appid": "",
     "setting": {

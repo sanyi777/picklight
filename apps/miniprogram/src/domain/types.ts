@@ -3,6 +3,7 @@ export type ISODate = string;
 export type ISODateTime = string;
 
 export type ScrapCategory = '灵感' | '随想' | '待办' | '分心' | '复盘';
+export type HabitWeekday = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 export interface Todo {
   id: ID;
@@ -13,6 +14,16 @@ export interface Todo {
   completedAt?: ISODateTime;
   rolledOverFrom?: ISODate;
   sourceScrapId?: ID;
+  sourceHabitId?: ID;
+  createdAt: ISODateTime;
+  updatedAt: ISODateTime;
+}
+
+export interface Habit {
+  id: ID;
+  content: string;
+  time: string;
+  weekdays: HabitWeekday[];
   createdAt: ISODateTime;
   updatedAt: ISODateTime;
 }
@@ -61,12 +72,13 @@ export interface PicklightState {
   scraps: Scrap[];
   anchors: DailyAnchor[];
   focusSessions: FocusSession[];
+  habits: Habit[];
   activeDate: ISODate;
 }
 
 export interface PicklightBackup {
   app: 'picklight';
-  schemaVersion: 2;
+  schemaVersion: 3;
   exportedAt: ISODateTime;
   state: PicklightState;
 }
