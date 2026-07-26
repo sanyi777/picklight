@@ -18,6 +18,7 @@ const todoHasTime = ref(false);
 const todoTime = ref('09:00');
 const anchorTitle = ref('');
 const showGuide = ref(false);
+const showQuickCapture = ref(false);
 const guideStep = ref(0);
 const guideHighlight = ref<'capture' | 'todo' | null>(null);
 const showDataPanel = ref(false);
@@ -73,11 +74,20 @@ function continueGuide() {
 
 function submitQuickScrap(category: Parameters<typeof store.addScrap>[0], content: string, time = '') {
   store.addScrap(category, content, time);
+  showQuickCapture.value = false;
   if (guideHighlight.value === 'capture') {
     guideHighlight.value = null;
     guideStep.value = 1;
     showGuide.value = true;
   }
+}
+
+function openQuickCapture() {
+  showQuickCapture.value = true;
+}
+
+function closeQuickCapture() {
+  showQuickCapture.value = false;
 }
 
 function submitAnchor() {
@@ -278,13 +288,8 @@ function confirmResetData() {
       <section class="quick-row">
         <view :class="['card', 'quick-card', 'quick-capture-card', { 'guide-target': guideHighlight === 'capture' }]">
           <text class="quick-title">快速捕捉</text>
-          <text class="quick-copy">先把想法放下，默认进入零碎池。</text>
-          <ScrapComposer
-            class="quick-composer"
-            variant="compact"
-            placeholder="记录一个念头"
-            @submit="submitQuickScrap"
-          />
+          <text class="quick-copy">先把想法放下，不必立刻整理。</text>
+          <button class="quick-capture-action" @tap.stop="openQuickCapture">记录现在的想法</button>
         </view>
 
         <view class="card quick-card quick-focus-card">
@@ -309,6 +314,23 @@ function confirmResetData() {
             <button class="guide-skip" @tap.stop="closeGuide">暂时跳过</button>
             <button class="primary guide-close" @tap.stop="continueGuide">{{ guideCopy.action }}</button>
           </view>
+        </view>
+      </view>
+
+      <view v-if="showQuickCapture" class="quick-capture-overlay" @tap="closeQuickCapture">
+        <view class="quick-capture-panel" @tap.stop>
+          <view class="quick-capture-head">
+            <view>
+              <text class="quick-capture-title">快速捕捉</text>
+              <text class="quick-capture-subtitle">先记下，之后再决定怎么用。</text>
+            </view>
+            <button class="close-action" @tap.stop="closeQuickCapture">关闭</button>
+          </view>
+          <ScrapComposer
+            auto-focus
+            placeholder="此刻想到什么？"
+            @submit="submitQuickScrap"
+          />
         </view>
       </view>
 
@@ -736,7 +758,7 @@ function confirmResetData() {
 }
 
 .quick-capture-card {
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) 34px;
 }
 
 .quick-focus-card {
@@ -757,12 +779,67 @@ function confirmResetData() {
   line-height: 1.3;
 }
 
-.quick-composer {
-  min-height: 0;
+.quick-capture-action {
+  height: 34px;
+  min-height: 34px;
+  border: 0;
+  border-radius: 8px;
+  margin: 0;
+  padding: 0 8px;
+  background: #eaf4ff;
+  color: #2f72b4;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 34px;
 }
 
-.quick-composer :deep(.composer) {
-  gap: 6px;
+.quick-capture-overlay {
+  position: fixed;
+  z-index: 26;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  background: rgba(32, 39, 51, 0.36);
+}
+
+.quick-capture-panel {
+  display: grid;
+  width: 100%;
+  max-width: 420px;
+  gap: 14px;
+  border: 1px solid #dce4ec;
+  border-radius: 8px;
+  padding: 16px;
+  background: #ffffff;
+  box-shadow: 0 18px 48px rgba(32, 39, 51, 0.2);
+}
+
+.quick-capture-head {
+  display: flex;
+  min-width: 0;
+  align-items: start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.quick-capture-title,
+.quick-capture-subtitle {
+  display: block;
+}
+
+.quick-capture-title {
+  color: #202733;
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.quick-capture-subtitle {
+  margin-top: 4px;
+  color: #6f7b8a;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .timer-mini {

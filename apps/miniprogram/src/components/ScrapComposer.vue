@@ -8,11 +8,13 @@ const props = withDefaults(
     defaultCategory?: ScrapCategory;
     placeholder?: string;
     variant?: 'chips' | 'compact';
+    autoFocus?: boolean;
   }>(),
   {
     defaultCategory: '随想',
     placeholder: '先放下一个想法',
-    variant: 'chips'
+    variant: 'chips',
+    autoFocus: false
   }
 );
 
@@ -48,12 +50,12 @@ function submit() {
         </picker>
         <button class="save-button" @click="submit">保存</button>
       </view>
-      <textarea v-model="content" :placeholder="placeholder" maxlength="500" />
+      <textarea v-model="content" :placeholder="placeholder" maxlength="500" :focus="autoFocus" />
       <TodoTimePicker v-if="category === '待办'" v-model:has-time="todoHasTime" v-model:time="todoTime" compact />
     </template>
 
     <template v-else>
-      <textarea v-model="content" :placeholder="placeholder" maxlength="500" />
+      <textarea v-model="content" :placeholder="placeholder" maxlength="500" :focus="autoFocus" />
       <view class="composer-actions">
         <scroll-view scroll-x enable-flex class="category-scroll">
           <view class="category-row">
