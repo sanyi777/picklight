@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue';
 import AnchorCard from '@/components/AnchorCard.vue';
 import CoverScreenMode from '@/components/CoverScreenMode.vue';
+import HabitManagerModal from '@/components/HabitManagerModal.vue';
 import MiniProgramShell from '@/components/MiniProgramShell.vue';
 import ScrapComposer from '@/components/ScrapComposer.vue';
 import TodoTimePicker from '@/components/TodoTimePicker.vue';
@@ -22,6 +23,7 @@ const showQuickCapture = ref(false);
 const guideStep = ref(0);
 const guideHighlight = ref<'capture' | 'todo' | null>(null);
 const showDataPanel = ref(false);
+const showHabitPanel = ref(false);
 const backupText = ref('');
 const importText = ref('');
 const weekStartDate = todayISODate();
@@ -53,7 +55,7 @@ function openGuide() {
 }
 
 function openHabits() {
-  uni.navigateTo({ url: '/pages/habits/index' });
+  showHabitPanel.value = true;
 }
 
 function closeGuide() {
@@ -385,6 +387,7 @@ function confirmResetData() {
           </view>
         </view>
       </view>
+      <HabitManagerModal v-if="showHabitPanel" @close="showHabitPanel = false" />
       </view>
     </MiniProgramShell>
   </view>
