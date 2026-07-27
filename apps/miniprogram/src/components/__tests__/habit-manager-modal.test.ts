@@ -31,6 +31,6 @@ describe('habit card architecture', () => {
     expect(modal).toContain('height: 174px;');
     expect(modal).toContain('height: 58px;');
     expect(modal).toContain('<view v-else class="empty-state">');
-    expect(modal).toContain('.habit-list,\n.empty-state');
+    expect(modal).toMatch(/\.habit-list,\r?\n\.empty-state/);
   });
 });
